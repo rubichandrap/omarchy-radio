@@ -423,6 +423,27 @@ screen is written into the path, because those are places somebody can be
 sent; a half-typed query is not one, and a canonical link to one would be
 worse than useless.
 
+## The play order
+
+Repeat and shuffle are two answers to one question — what happens next — and
+the deck answers it by walking an **order**: a permutation of the playing
+list, or the list's own order while shuffle is off, which is why none of the
+modes show up in the arithmetic that advances. `next()` and `prev()` step the
+order; the element's `ended` handler is the only place the repeat mode is
+asked. Shuffle is what makes the order a permutation, and it permutes the
+*play order* rather than the list on screen — numbers, permalinks and the
+pages the build writes stay still while what advances moves; the reasoning is
+[ADR 0001](docs/adr/0001-shuffle-permutes-play-order-not-the-list.md).
+
+A cycle is one pass through the order: every item once. Stepping off the end
+draws a new permutation and stands the deck at its head — never the item that
+just played, because a reshuffle that opens on the song which ended the last
+cycle is not a reshuffle. What the cycle has already had stays behind the
+deck, and it is held **by key** rather than by index: turning shuffle on
+mid-track, pressing a row, and a manifest or feed landing under the deck all
+draw the order again, and indices would leave it naming the wrong items once
+the list has moved.
+
 ## The meter, and being sent to a song
 
 Two smaller things came out of the same idea as the field.

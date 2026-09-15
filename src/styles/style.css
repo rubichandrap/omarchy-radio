@@ -523,6 +523,11 @@ a, button, [role="slider"] { -webkit-tap-highlight-color: transparent; }
    hover rule so that a pressed button stays lit through a hover. */
 .tb-repeat[aria-pressed="true"] { color: var(--ac); }
 
+/* The shuffle button is one state deep, and its face carries none of it: the
+   accent says the order is a permutation, and the accessible name says which
+   way. It sits after the hover rule for the same reason. */
+.tb-shuffle[aria-pressed="true"] { color: var(--ac); }
+
 .tb-play {
   width: 74px;
   font-size: 13px;

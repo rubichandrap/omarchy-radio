@@ -30,6 +30,8 @@
      - the last track runs into the first one
      - the repeat modes: `one` plays a finished item again from the top, `off`
        stops at the end of the play order and the next play starts from its head
+     - the shuffle order: a permutation of the list walked one row at a time,
+       a new cycle opened on a different row, and the deck it survives
 */
 
 import { spawn } from 'node:child_process';
@@ -182,6 +184,13 @@ window.__state = function () {
         label: b ? b.getAttribute('aria-label') || '' : 'no repeat button',
         pressed: b ? b.getAttribute('aria-pressed') || '' : '',
         one: !!(b && b.classList.contains('is-one'))
+      };
+    })(),
+    shuffle: (function () {
+      var b = document.getElementById('shuffle');
+      return {
+        label: b ? b.getAttribute('aria-label') || '' : 'no shuffle button',
+        pressed: b ? b.getAttribute('aria-pressed') || '' : ''
       };
     })(),
     plays: window.__probe.plays.slice(),
@@ -681,6 +690,196 @@ async function repeatModes({ songs }) {
   }
 }
 
+/* Shuffle is the order the deck walks, and an order is only visible by
+   walking it: the section turns it on mid-list, then reads the lit row off
+   the page for every step of the rest of the cycle. What it checks is the
+   property a permutation has — every row once before any row twice, the
+   rows already passed left behind, a new cycle opening somewhere other than
+   where the last one ended — and that the setting is the kind that survives
+   a reload while a permalink still beats it. */
+async function shuffleOrder({ songs }) {
+  section('shuffling the play order');
+  const browser = await Browser.launch('no-user-gesture-required');
+  const tab = await browser.tab();
+  try {
+    const song = songs[1];
+    await tab.go(song.path);
+    let s = await until('the song to start, out of the whole playlist', async () => {
+      const st = await tab.state();
+      return st.playing && st.at > 0 && st.rows >= songs.length ? st : null;
+    });
+    if (!s) return;
+
+    is(s.shuffle.pressed, 'false', 'the deck arrives walking the list\'s own order');
+    ok(!/shuffled/.test(s.note), `and the note does not claim otherwise (${s.note.trim()})`);
+
+    // The list's own order, which is what turning it on departs from.
+    await tab.click('#next');
+    s = await until('the list\'s own next row', async () => {
+      const st = await tab.state();
+      return st.rowHref !== song.path ? st : null;
+    });
+    if (!s) return;
+    is(s.rowHref, songs[2].path, 'shuffle off, next is the row after this one');
+    await tab.click('#prev');
+    if (!await until('the row it was on', async () => {
+      const st = await tab.state();
+      return st.rowHref === song.path ? st : null;
+    })) return;
+
+    // ── on: the order is drawn again, and the item playing keeps playing ──
+    await tab.click('#shuffle');
+    s = await until('shuffle on', async () => {
+      const st = await tab.state();
+      return st.shuffle && st.shuffle.pressed === 'true' ? st : null;
+    });
+    if (!s) return;
+    /* Through the history rather than the line itself: a press here follows
+       a load, and `buffering…` can land on top of the change a moment after
+       it is written. */
+    ok(s.statuses.includes('shuffle on'), 'the change is written on the status line');
+    ok(/, shuffled/.test(s.note.trim()), `the note says the order is shuffled (${s.note.trim()})`);
+    is(await tab.eval("localStorage.getItem('omarchy-radio-shuffle')"), 'on', 'the setting is kept for the next visit');
+    is(s.rowHref, song.path, 'and the item playing keeps playing');
+    is(s.path, song.path, 'turning it on is not an address');
+
+    /* The walk. The cycle already had the rows behind the deck, so what is
+       left is every row but those two — and pressing next once per row is
+       the only way to see an order from the page. */
+    const visited = [];
+    for (let i = 0; i < songs.length - 2; i++) {
+      const was = visited.length ? visited[visited.length - 1] : song.path;
+      await tab.click('#next');
+      const st = await until('a row the cycle had left', async () => {
+        const now = await tab.state();
+        return now.rowHref && now.rowHref !== was ? now : null;
+      });
+      if (!st) return;
+      visited.push(st.rowHref);
+    }
+    const uniq = new Set(visited);
+    is(uniq.size, visited.length, `the cycle walks its ${visited.length} rows without repeating one`);
+    ok(songs.slice(2).every((r) => uniq.has(r.path)), 'and it is every row the cycle had left, each once');
+    ok(!uniq.has(song.path) && !uniq.has(songs[0].path),
+       'neither the item playing nor the rows already passed come back before the cycle is out');
+
+    // Back means back: prev retreats along the order, not the list.
+    await tab.click('#prev');
+    s = await until('prev along the order', async () => {
+      const st = await tab.state();
+      return st.rowHref !== visited[visited.length - 1] ? st : null;
+    });
+    if (s) is(s.rowHref, visited[visited.length - 2], 'prev retreats along the shuffled order');
+
+    // ── off the end of the cycle: a new one, opened on another row ──
+    const last = visited[visited.length - 1];
+    await tab.click('#next'); // back onto the row the cycle ended on
+    if (!await until('the last row again', async () => {
+      const st = await tab.state();
+      return st.rowHref === last ? st : null;
+    })) return;
+    await tab.click('#next');
+    const head = await until('a new cycle, opened on another row', async () => {
+      const st = await tab.state();
+      return st.rowHref && st.rowHref !== last ? st.rowHref : null;
+    });
+    if (head) ok(true, `the cycle after it opens elsewhere (${head}, after ${last})`);
+
+    // ── a row pressed out of turn: it becomes where the deck stands ──
+    const pick = songs[10];
+    await tab.click(`a.track[href="${pick.path}"]`);
+    s = await until('the pressed row', async () => {
+      const st = await tab.state();
+      return st.rowHref === pick.path ? st : null;
+    });
+    if (!s) return;
+    is(s.path, pick.path, 'a row pressed while shuffled becomes the current position');
+    await tab.click('#next');
+    ok(await until('the row after the pressed one', async () => {
+      const st = await tab.state();
+      return st.rowHref && st.rowHref !== pick.path ? st : null;
+    }), 'next walks the rebuilt order on from the pressed row');
+    await tab.click('#prev');
+    ok(await until('the pressed row again', async () => {
+      const st = await tab.state();
+      return st.rowHref === pick.path ? st : null;
+    }), 'and prev steps back onto it, not the list\'s own previous row');
+
+    // ── off: the list's own order again, taken up where the deck stands ──
+    await tab.click('#shuffle');
+    s = await until('shuffle off', async () => {
+      const st = await tab.state();
+      return st.shuffle && st.shuffle.pressed === 'false' ? st : null;
+    });
+    if (!s) return;
+    ok(s.statuses.includes('shuffle off'), 'the status says which way it is');
+    ok(!/shuffled/.test(s.note), `and the note stops claiming it (${s.note.trim()})`);
+    is(await tab.eval("localStorage.getItem('omarchy-radio-shuffle')"), 'off', 'and the setting is kept');
+    is(s.rowHref, pick.path, 'the item playing still keeps playing');
+    await tab.click('#next');
+    s = await until('the list\'s own next again', async () => {
+      const st = await tab.state();
+      return st.rowHref !== pick.path ? st : null;
+    });
+    if (s) is(s.rowHref, songs[11].path, 'shuffle off, next is the list\'s own next row again');
+
+    // ── on again, and a permalink followed while shuffled ──
+    await tab.click('#shuffle');
+    if (!await until('shuffle on again', async () => {
+      const st = await tab.state();
+      return st.shuffle && st.shuffle.pressed === 'true' ? st : null;
+    })) return;
+    const named = songs[4];
+    await tab.go(named.path);
+    s = await until('the permalink to play what it names', async () => {
+      const st = await tab.state();
+      return st.playing && st.at > 0 ? st : null;
+    });
+    if (!s) return;
+    is(s.row, named.title, 'a permalink followed with shuffle on plays the item it names');
+    ok(decodeURIComponent(s.src).includes(named.file), 'and it is that file playing');
+    is(s.shuffle.pressed, 'true', 'while the setting comes back with the page');
+    ok(/, shuffled/.test(s.note.trim()), `and the note says so (${s.note.trim()})`);
+
+    await tab.send('Page.reload');
+    s = await until('the deck after the reload', async () => {
+      const st = await tab.state();
+      return st.playing && st.at > 0 ? st : null;
+    });
+    if (s) {
+      is(s.row, named.title, 'a reload keeps playing the item the address names');
+      is(s.shuffle.pressed, 'true', 'and keeps the order shuffled');
+      is(await tab.eval("localStorage.getItem('omarchy-radio-shuffle')"), 'on',
+         'which is the state read back at boot');
+    }
+
+    // ── S does what the button does, and leaves a text field alone ──
+    const pressS = (where) => tab.eval(`(function () {
+      var t = ${where};
+      t.dispatchEvent(new KeyboardEvent('keydown', { key: 's', code: 'KeyS', bubbles: true, cancelable: true }));
+      return true;
+    })()`);
+
+    await tab.eval("document.getElementById('find').focus()");
+    await pressS("document.getElementById('find')");
+    is((await tab.state()).shuffle.pressed, 'true',
+       'S does nothing while the find box has the cursor');
+    await tab.eval("document.getElementById('find').blur()");
+    await pressS('document.body');
+    s = await until('S to turn it off', async () => {
+      const st = await tab.state();
+      return st.shuffle && st.shuffle.pressed === 'false' ? st : null;
+    });
+    if (s) {
+      ok(s.statuses.includes('shuffle off'), 'S toggles the order from anywhere on the deck');
+      ok(!/shuffled/.test(s.note.trim()), 'and the note follows it');
+    }
+  } finally {
+    await tab.close();
+    await browser.close();
+  }
+}
+
 /* The desktop's own theme, as omarchy-theme-sync publishes it: the palette
    goes onto <html> as --omarchy-* properties, which is the extension's whole
    contract with a page. This writes them the way it would. */
@@ -1171,6 +1370,7 @@ try {
   console.log(`${site.songs.length} songs, ${site.eps.length} episodes`);
   await autoplayAllowed(site);
   await repeatModes(site);
+  await shuffleOrder(site);
   await autoplayRefused(site);
   await find(site);
   await reveal(site);

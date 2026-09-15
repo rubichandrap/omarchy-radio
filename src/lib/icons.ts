@@ -59,6 +59,18 @@ const LOOP: Cell[] = [
   [3, 6, 1, 1], [1, 7, 3, 1], [3, 8, 1, 1],   // and the head at the other end
 ];
 
+/* The two lines the shuffle button draws: a stub at the top and one at the
+   bottom, trading places across the middle and running out into a head on
+   the far side, which is the shape a player has used for this for as long
+   as the arrows have existed. Stepped one cell at a time, so the diagonal
+   lands on the pixel grid like every other edge on this deck. */
+const SHUFFLE: Cell[] = [
+  [0, 2, 2, 1], [2, 3, 1, 1], [3, 4, 1, 1], [4, 5, 1, 1], [5, 6, 1, 1], [6, 7, 1, 1],
+  [7, 7, 2, 1], [9, 6, 1, 1], [10, 7, 1, 1], [9, 8, 1, 1],   // the top line, down to its head
+  [0, 7, 2, 1], [2, 6, 1, 1], [3, 5, 1, 1], [4, 4, 1, 1], [5, 3, 1, 1], [6, 2, 1, 1],
+  [7, 2, 2, 1], [9, 1, 1, 1], [10, 2, 1, 1], [9, 3, 1, 1],   // and the bottom one, over the top
+];
+
 export const ICONS: Record<string, Icon> = {
   /* The transport, every one of them on the same 12x10 box so they are the
      same weight in a row of buttons and need no nudging to look centred. */
@@ -79,9 +91,11 @@ export const ICONS: Record<string, Icon> = {
     cells: [...triangle(SMALL, 'right', 0, 5), ...triangle(SMALL, 'right', 6, 5)],
   },
 
-  /* The repeat button's two faces. One button, three modes: `off` and `all`
-     share the plain loop and the accent is what tells them apart, so the
-     face only has to carry the odd one out. */
+  /* The shuffle button's one face, and the repeat button's two. One repeat
+     button covers three modes: `off` and `all` share the plain loop and the
+     accent is what tells them apart, so the face only has to carry the odd
+     one out. */
+  shuffle: { w: 12, h: 10, label: 'Shuffle', cells: SHUFFLE },
   repeat: { w: 12, h: 10, label: 'Repeat', cells: LOOP },
   'repeat-one': {
     w: 12, h: 10, label: 'Repeat one',

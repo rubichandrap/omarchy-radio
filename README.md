@@ -30,7 +30,7 @@ Full credit belongs to [omacom/radio.omarchy.org](https://github.com/omacom/radi
 
 | Feature | Status | Description |
 |---|---|---|
-| **Shuffle Mode** | In Progress | Randomize playback order with unvisited history tracking (no immediate repeats) |
+| **Shuffle Mode** | Active | Walk a shuffled play order: every track once per cycle, a fresh draw each time |
 | **Repeat Modes** | Active | Cycle between Repeat Off, Repeat One (loop track), and Repeat All (loop playlist) |
 | **Playback Queue** | In Progress | "Play Next" and "Add to Queue" actions without interrupting the current track |
 | **Custom Playlists** | In Progress | Create, manage, and switch between curated subsets of tracks |
@@ -41,7 +41,7 @@ Full credit belongs to [omacom/radio.omarchy.org](https://github.com/omacom/radi
 | **Instant Search (`/`)** | Active | Real-time fuzzy filter over titles and artists with diacritic folding |
 | **Podcast Feed** | Active | Mirrored feed from Omarchy Stories with chapter jumping and permalinks |
 | **Headless Autoplay** | Active | Zero-audio-restriction playback using a headless `<video>` element |
-| **Persistent State** | Planned | Retain active theme, shuffle/repeat preferences, queue, and volume across page reloads |
+| **Persistent State** | In Progress | Retain the theme and the shuffle/repeat settings across reloads; queue and volume still to come |
 
 ---
 

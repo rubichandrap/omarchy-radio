@@ -270,7 +270,7 @@ function iconRule() {
   // The transport's controls, both faces of the ones that have two, and the
   // arrow that says a link leaves the site.
   for (const name of ['play', 'pause', 'stop', 'prev', 'next',
-                      'repeat', 'repeat-one',
+                      'shuffle', 'repeat', 'repeat-one',
                       'caret-down', 'caret-up', 'caret-right', 'arrow-ne']) {
     ok(ICONS[name], `there is no icon called ${name}`);
   }
