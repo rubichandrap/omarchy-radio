@@ -1,3 +1,11 @@
+> **Fork notice:** This is a personal fork of [omacom/radio.omarchy.org](https://github.com/omacom/radio.omarchy.org) by [@rubichandrap](https://github.com/rubichandrap). The upstream project is the real station. This fork exists to experiment with new player features before proposing them upstream.
+>
+> **Planned features** (tracked in this repo):
+> - [ ] Shuffle mode — play the playlist in random order
+> - [ ] Repeat modes — repeat one track, or loop the whole playlist
+> - [ ] Queue — add tracks to an up-next list without leaving the current song
+> - [ ] Persistent state — remember shuffle/repeat/position across page loads
+
 # Omarchy Radio
 
 The site behind [radio.omarchy.org](https://radio.omarchy.org). A playlist that lives in this repo and plays itself: open the page and it starts at the top, works its way down, and goes round again. Every song in it arrived as a pull request.
