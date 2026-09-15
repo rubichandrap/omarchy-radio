@@ -31,7 +31,7 @@ Full credit belongs to [omacom/radio.omarchy.org](https://github.com/omacom/radi
 | Feature | Status | Description |
 |---|---|---|
 | **Shuffle Mode** | In Progress | Randomize playback order with unvisited history tracking (no immediate repeats) |
-| **Repeat Modes** | In Progress | Cycle between Repeat Off, Repeat One (loop track), and Repeat All (loop queue/playlist) |
+| **Repeat Modes** | Active | Cycle between Repeat Off, Repeat One (loop track), and Repeat All (loop playlist) |
 | **Playback Queue** | In Progress | "Play Next" and "Add to Queue" actions without interrupting the current track |
 | **Custom Playlists** | In Progress | Create, manage, and switch between curated subsets of tracks |
 | **Terminal Theme Sync** | Active | Dynamic integration with desktop terminal colors (`colors.toml` via `omarchy-theme-sync`) |

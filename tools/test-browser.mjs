@@ -28,6 +28,8 @@
        taking the address over
      - a slug that names nothing falls back to the playlist
      - the last track runs into the first one
+     - the repeat modes: `one` plays a finished item again from the top, `off`
+       stops at the end of the play order and the next play starts from its head
 */
 
 import { spawn } from 'node:child_process';
@@ -68,6 +70,16 @@ function is(actual, expected, what) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* The needle, dropped near the end of whatever the deck is playing: the
+   suite's only way of reaching an `ended` without waiting out a song. False
+   while the element is not seekable yet. */
+const seekToEnd = (tab) => tab.eval(`(function () {
+  var live = window.__probe.media.filter(function (m) { return !m.paused; })[0];
+  if (!live || !isFinite(live.duration) || !live.duration) return false;
+  live.currentTime = live.duration - 0.3;
+  return true;
+})()`);
 
 async function until(what, fn, ms = 6000, step = 100) {
   const deadline = Date.now() + ms;
@@ -164,6 +176,14 @@ window.__state = function () {
       function (li) { return li.dataset.skin; }),
     tab: (document.querySelector('.seg-b.is-on') || {}).id || '',
     note: (document.getElementById('playlistNote') || {}).textContent || '',
+    repeat: (function () {
+      var b = document.getElementById('repeat');
+      return {
+        label: b ? b.getAttribute('aria-label') || '' : 'no repeat button',
+        pressed: b ? b.getAttribute('aria-pressed') || '' : '',
+        one: !!(b && b.classList.contains('is-one'))
+      };
+    })(),
     plays: window.__probe.plays.slice(),
     statuses: window.__probe.statuses.slice(),
     copied: window.__probe.copied.slice(),
@@ -532,6 +552,135 @@ async function reveal({ songs }) {
   }
 }
 
+/* The repeat modes, which are what an item running out means. `all` is the
+   default every section above leans on; this one pins the other two. Both are
+   checked the way the rotation is — by dropping the needle near the end of the
+   live element rather than by watching a clock — and reading what the deck did
+   next off the page. */
+async function repeatModes({ songs }) {
+  section('the repeat modes');
+  const browser = await Browser.launch('no-user-gesture-required');
+  const tab = await browser.tab();
+  try {
+    const song = songs[1];
+    await tab.go(song.path);
+    let s = await until('the song to start', async () => {
+      const st = await tab.state();
+      return st.playing && st.at > 0 ? st : null;
+    });
+    if (!s) return;
+
+    is(s.repeat.label, 'Repeat mode: all', 'the deck arrives repeating the cycle');
+    is(s.repeat.pressed, 'true', 'and the button says the mode is on');
+    ok(/, on repeat$/.test(s.note.trim()), `the note under the list says so (${s.note.trim()})`);
+
+    // The needle, dropped near the end of whatever is playing.
+    const toEnd = () => seekToEnd(tab);
+
+    // ── one: a finished item plays again, from the top ──
+    await tab.click('#repeat');
+    s = await until('the mode to change', async () => {
+      const st = await tab.state();
+      return st.repeat && st.repeat.label === 'Repeat mode: one' ? st : null;
+    });
+    if (s) {
+      is(s.status.trim(), 'repeat one', 'the change is written on the status line');
+      ok(s.repeat.one, 'the button wears the repeat-one face');
+      is(s.repeat.pressed, 'true', 'and says the mode is on');
+      ok(/, repeating one$/.test(s.note.trim()), `and the note names the mode (${s.note.trim()})`);
+      is(await tab.eval("localStorage.getItem('omarchy-radio-repeat')"), 'one',
+         'the mode is kept for the next visit');
+
+      const before = s.plays.length;
+      if (ok(await until('the track to be runnable to its end', toEnd, 15000, 200),
+             'the track can be run to its end')) {
+        s = await until('the same file to start again', async () => {
+          const st = await tab.state();
+          return st.playing && st.at > 0 && st.at < 10 && st.plays.length > before ? st : null;
+        }, 15000);
+        if (s) {
+          is(s.plays.length, before + 1, 'repeat one starts it over, once');
+          ok(decodeURIComponent(s.src).includes(song.file), 'the same file, not the next one');
+          ok(s.at < 10, `from the top of it, not from where it finished (${s.at.toFixed(2)}s in)`);
+          is(s.row, song.title, 'and the deck goes on standing where it stood');
+        }
+      }
+    }
+
+    // ── off: the end of the order stops the deck, and the head is next ──
+    await tab.click('#repeat');
+    s = await until('the mode to change again', async () => {
+      const st = await tab.state();
+      return st.repeat && st.repeat.label === 'Repeat mode: off' ? st : null;
+    });
+    if (!s) return;
+    is(s.status.trim(), 'repeat off', 'the status says which mode is on');
+    is(s.repeat.pressed, 'false', 'and the button says the mode is off');
+    ok(!/repeat/.test(s.note), `the note stops claiming one (${s.note.trim()})`);
+    is(await tab.eval("localStorage.getItem('omarchy-radio-repeat')"), 'off', 'and the mode is kept');
+
+    /* A reload is where the kept mode is read, and the last song is where the
+       end of the order is. */
+    const last = songs[songs.length - 1];
+    await tab.go(last.path);
+    s = await until('the last song, with the mode read back', async () => {
+      const st = await tab.state();
+      return st.playing && st.at > 0 && st.repeat.label === 'Repeat mode: off' ? st : null;
+    });
+    if (!s) return;
+    is(s.repeat.label, 'Repeat mode: off', 'the kept mode is the one read at boot');
+
+    const before = s.plays.length;
+    if (ok(await until('the last track to be runnable to its end', toEnd, 15000, 200),
+           'the last track can be run to its end')) {
+      s = await until('the deck to stop at the end of the order', async () => {
+        const st = await tab.state();
+        return !st.playing && /has ended/.test(st.status) ? st : null;
+      }, 15000);
+      if (s) {
+        is(s.status.trim(), 'the playlist has ended', 'the status line says the playlist has ended');
+        is(s.plays.length, before, 'nothing else was played');
+        is(s.row, songs[0].title, 'the deck stands at the head of the order');
+        is(s.path, songs[0].path, 'and the address says where it stands');
+
+        // Which is where the next play starts from.
+        await tab.click('#toggle');
+        s = await until('the first song to start', async () => {
+          const st = await tab.state();
+          return st.playing && st.plays.length > before ? st : null;
+        }, 15000);
+        if (s) ok(decodeURIComponent(s.src).includes(songs[0].file),
+                  'the next play starts from the head of the order');
+      }
+    }
+
+    // ── R does what the button does, and leaves a text field alone ──
+    const pressR = (where) => tab.eval(`(function () {
+      var t = ${where};
+      t.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', code: 'KeyR', bubbles: true, cancelable: true }));
+      return true;
+    })()`);
+
+    await tab.eval("document.getElementById('find').focus()");
+    await pressR("document.getElementById('find')");
+    is((await tab.state()).repeat.label, 'Repeat mode: off',
+       'R does nothing while the find box has the cursor');
+    await tab.eval("document.getElementById('find').blur()");
+    await pressR('document.body');
+    s = await until('R to cycle the mode', async () => {
+      const st = await tab.state();
+      return st.repeat.label === 'Repeat mode: all' ? st : null;
+    });
+    if (s) {
+      is(s.status.trim(), 'repeat all', 'R cycles the mode from anywhere on the deck');
+      ok(/, on repeat$/.test(s.note.trim()), 'and the note follows the mode');
+    }
+  } finally {
+    await tab.close();
+    await browser.close();
+  }
+}
+
 /* The desktop's own theme, as omarchy-theme-sync publishes it: the palette
    goes onto <html> as --omarchy-* properties, which is the extension's whole
    contract with a page. This writes them the way it would. */
@@ -767,12 +916,7 @@ async function autoplayAllowed({ songs, eps }) {
     // The server answers byte ranges, so the needle can just be dropped.
     await tab.go(last.path);
     await until('the last song again', async () => (await tab.state()).playing);
-    const seeked = await until('the last song to be seekable', () => tab.eval(`(function () {
-      var live = window.__probe.media.filter(function (m) { return !m.paused; })[0];
-      if (!live || !isFinite(live.duration) || !live.duration) return false;
-      live.currentTime = live.duration - 0.3;
-      return true;
-    })()`), 15000, 200);
+    const seeked = await until('the last song to be seekable', () => seekToEnd(tab), 15000, 200);
     if (ok(seeked, 'the last track can be run to its end')) {
       s = await until('the first song to come round', async () => {
         const st = await tab.state();
@@ -1026,6 +1170,7 @@ try {
   const site = await routes();
   console.log(`${site.songs.length} songs, ${site.eps.length} episodes`);
   await autoplayAllowed(site);
+  await repeatModes(site);
   await autoplayRefused(site);
   await find(site);
   await reveal(site);

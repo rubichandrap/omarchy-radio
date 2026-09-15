@@ -44,6 +44,8 @@ var STORE_KEY = 'omarchy-radio-skin';
 var STORE_PIN = 'omarchy-radio-skin-pinned';
 var STORE_TRACKS = 'omarchy-radio-playlist';
 var STORE_STORIES = 'omarchy-radio-stories';
+/* What the deck does when an item ends. Kept, so the mode outlives the tab. */
+var STORE_REPEAT = 'omarchy-radio-repeat';
 
 var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -58,6 +60,7 @@ var IDS = [
   'themeBtn', 'themeMenu',
   'themeCaret', 'skinName', 'stationLabel', 'srcLabel',
   'marq', 'artist', 'curTime', 'durTime', 'vis', 'prev', 'toggle', 'stop', 'next',
+  'repeat',
   'seek', 'seekFill', 'seekHead', 'volKnob', 'volRot', 'volLabel',
   'playlistKind', 'playlistName', 'tracks', 'trHead', 'playlistNote',
   'status', 'seg', 'tabSongs', 'tabPodcast',
@@ -84,6 +87,9 @@ type Tab = 'songs' | 'stories';
 /** What the listener last asked for, which is what a dropped track is judged
     against: still 'play' means reconnect, 'pause' means leave it alone. */
 type Intent = 'idle' | 'play' | 'pause' | 'stop';
+/** What the deck does when an item ends: `all` comes round again, `one` plays
+    the same item over, `off` stops at the end of the order. */
+type Repeat = 'off' | 'all' | 'one';
 
 interface State {
   mode: Mode;
@@ -100,6 +106,9 @@ interface State {
   epOpen: boolean;
   feedErr: boolean;
   playing: boolean;
+  /** What an item running out means, which is what the repeat button says
+      and the note under the list repeats. Read from the store, once, below. */
+  repeat: Repeat;
   vol: number;
   cur: number;
   dur: number;
@@ -127,6 +136,7 @@ var S: State = {
   epOpen: true,
   feedErr: false,
   playing: false,
+  repeat: 'all',
   vol: 0.8,
   cur: 0,
   dur: 0,
@@ -162,6 +172,15 @@ try {
 
 var start = pinned || restored;
 if (start && SKINS.some(function (k) { return k.name === start; })) S.skin = start;
+
+/* What the deck does when an item ends, read once the way the theme is: a
+   mode is a setting, and nothing but the repeat button writes it. An unknown
+   word — an older deck's, a hand-edited store — is ignored rather than
+   trusted to mean something. */
+try {
+  var keptRepeat = localStorage.getItem(STORE_REPEAT) || '';
+  if (keptRepeat === 'off' || keptRepeat === 'all' || keptRepeat === 'one') S.repeat = keptRepeat;
+} catch (e) { /* private mode */ }
 
 /** Whether the desktop's theme, when there is one, is what to wear. */
 function followsDesktop(): boolean {
@@ -612,10 +631,11 @@ function makeAudio(analysed: boolean): HTMLMediaElement {
     paintClock();
     syncLyrics();
   });
-  // The end of one is the start of the next, and the end of the last is
-  // the start of the first. That is the whole of the rotation.
+  // What an item running out means is the repeat mode's business: round
+  // again, the same one from the top, or the end of the playlist. The mode
+  // is asked here and nowhere else.
   a.addEventListener('ended', function () {
-    if (mine()) next();
+    if (mine()) advance();
   });
   a.addEventListener('playing', function () {
     if (!mine()) return;
@@ -820,19 +840,83 @@ function anchor(list: Item[], i: number): number {
   return i;
 }
 
+/* An order belongs to the list it was built from, and the deck can be
+   playing a different one than the order remembers — a refused autoplay
+   replayed after the listener moved on, say. Rather than walking an order
+   that names the other list's items, the deck is put back on its feet where
+   it stands. Anything that reads `pos` asks this first. */
+function realign(l: Item[]) {
+  if (order.length !== l.length || order[pos] !== S.ti) anchor(l, S.ti);
+}
+
 /* A step of d along the order, wrapping at both ends: the last track runs
    into the first one, and stepping back from the first reaches the last. */
 function step(d: number): number {
   var l = playingList();
   if (!l.length) return -1;
-  /* An order belongs to the list it was built from, and the deck can be
-     playing a different one than the order remembers — a refused autoplay
-     replayed after the listener moved on, say. Rather than stepping through
-     an order that names the other list's items, the deck is put back on its
-     feet where it stands. */
-  if (order.length !== l.length || order[pos] !== S.ti) anchor(l, S.ti);
+  realign(l);
   pos = (pos + d + order.length) % order.length;
   return order[pos]!;
+}
+
+/* ── repeat ──────────────────────────────────────────────
+   What the deck does when an item runs out, which is the one thing the mode
+   decides. It is asked in the `ended` handler and nowhere else: a press is
+   not an ending, so next() and prev() go on wrapping in every mode. */
+
+/** The three, in the order the button walks them. */
+var REPEAT_MODES: Repeat[] = ['off', 'all', 'one'];
+
+function cycleRepeat() {
+  setRepeat(REPEAT_MODES[(REPEAT_MODES.indexOf(S.repeat) + 1) % REPEAT_MODES.length]!);
+}
+
+function setRepeat(m: Repeat) {
+  S.repeat = m;
+  try { localStorage.setItem(STORE_REPEAT, m); } catch (e) { /* private mode */ }
+  setStatus('repeat ' + m);
+  paintTransport();
+  /* The note under the list is a claim about the mode, so it is written
+     again here — unless the lyric sheet is open, which is using that line
+     for a sheet instead. */
+  if (!S.lyricsOpen) paintTrackNote();
+}
+
+/* Whether the deck stands on the last item the order names. The order has to
+   belong to the list that is playing, or the answer is about the other list,
+   so this asks realign() first, the way step() does. */
+function atEndOfOrder(): boolean {
+  var l = playingList();
+  if (!l.length) return true;
+  realign(l);
+  return pos === order.length - 1;
+}
+
+/* The end of the order with the mode off: the deck stops, says so, and
+   stands at the head again — the next play starts the cycle over rather
+   than picking the item it has just finished back up. The head is list
+   index 0, which is where the order starts while shuffle is off. */
+function endOfOrder() {
+  intent = 'stop';
+  cancelReconnect();
+  armed = null;
+  audio.pause();
+  loadedSrc = ''; // so the next play loads the head rather than the tail
+  anchor(playingList(), 0);
+  S.playing = false;
+  S.cur = 0;
+  /* Named for the list that ended: an episode running out is not the songs
+     playlist running out, and CONTEXT.md keeps the two words apart. */
+  setStatus(S.mode === 'story' ? 'the episodes have ended' : 'the playlist has ended');
+  paintAll();
+  syncRoute('replace');
+}
+
+/* An item ended: the one place the repeat mode decides anything. */
+function advance() {
+  if (S.repeat === 'one') { play(wantedSrc(), S.mode, S.ti); return; }
+  if (S.repeat === 'off' && atEndOfOrder()) { endOfOrder(); return; }
+  next();
 }
 
 function play(src: string, mode: Mode, ti: number) {
@@ -1466,6 +1550,12 @@ function paintTransport() {
      say the same two things. */
   el.toggle.classList.toggle('is-playing', S.playing);
   el.toggle.setAttribute('aria-label', S.playing ? 'Pause' : 'Play');
+  /* The repeat button: which face it wears, whether the mode is on at all,
+     and which of the three it is. Two of the three share a face, so the
+     accessible name is where that difference lives. */
+  el.repeat.classList.toggle('is-one', S.repeat === 'one');
+  el.repeat.setAttribute('aria-pressed', S.repeat === 'off' ? 'false' : 'true');
+  el.repeat.setAttribute('aria-label', 'Repeat mode: ' + S.repeat);
   el.volRot.style.transform = 'rotate(' + (-135 + S.vol * 270) + 'deg)';
   el.volLabel.textContent = String(Math.round(S.vol * 100));
   el.volKnob.setAttribute('aria-valuenow', String(Math.round(S.vol * 100)));
@@ -1973,8 +2063,13 @@ function paintTrackNote(shown = -1) {
     return;
   }
   if (S.tab === 'stories') { paintStoryNote(); return; }
+  /* The phrase is the mode's, and there is none when the deck will simply
+     stop at the end: a count is a count, while "on repeat" is a promise. */
+  var phrase = S.repeat === 'all' ? ', on repeat'
+    : S.repeat === 'one' ? ', repeating one'
+    : '';
   el.playlistNote.textContent = S.tracks.length
-    ? S.tracks.length + ' tracks, on repeat'
+    ? S.tracks.length + ' tracks' + phrase
     : 'nothing in the playlist yet';
 }
 
@@ -2353,6 +2448,7 @@ function boot() {
   el.stop.addEventListener('click', stop);
   el.next.addEventListener('click', next);
   el.prev.addEventListener('click', prev);
+  el.repeat.addEventListener('click', cycleRepeat);
   el.lyricsBtn.addEventListener('click', toggleLyrics);
 
   el.find.addEventListener('input', function () {
@@ -2402,6 +2498,13 @@ function boot() {
     var t = e.target;
     if (t instanceof Element && t.matches('input, textarea, [contenteditable]')) return;
     if (e.code === 'Space') { toggle(); e.preventDefault(); }
+    /* The repeat button's key, on the same terms as the find box's: a
+       modifier means the listener is asking the browser for something else,
+       and ctrl+R is a reload. */
+    if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      cycleRepeat();
+      e.preventDefault();
+    }
     /* The terminal's own binding for this, and the box says so. A modifier
        means the listener is asking the browser for something else. */
     if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {

@@ -85,12 +85,16 @@ a { color: var(--ac); text-decoration: none; }
    drawing out of the deck. The showing rules are the more specific ones, so
    they win without an !important or an ordering trick. */
 .tb-play .i-pause,
+.tb-repeat .i-repeat-one,
 .caret .i-caret-up,
 .tb-play.is-playing .i-play,
+.tb-repeat.is-one .i-repeat,
 .caret.is-open .i-caret-down { display: none; }
 
 .tb-play.is-playing .i-pause,
+.tb-repeat.is-one .i-repeat-one,
 .caret.is-open .i-caret-up { display: block; }
+
 a:hover { color: var(--fg); }
 
 /* The rows of the playlist are links to the tracks they name, and the deck
@@ -512,6 +516,12 @@ a, button, [role="slider"] { -webkit-tap-highlight-color: transparent; }
 }
 .tb:first-child { margin-left: 0; }
 .tb:hover { border-color: var(--ac); color: var(--ac); z-index: 1; }
+
+/* The repeat button has three modes and two faces, so the face cannot carry
+   all of it: the accent says the cycle will come round again, and the
+   accessible name says which of the repeating ones it is. It sits after the
+   hover rule so that a pressed button stays lit through a hover. */
+.tb-repeat[aria-pressed="true"] { color: var(--ac); }
 
 .tb-play {
   width: 74px;
