@@ -18,32 +18,30 @@
 
    Bump VERSION to retire every old cache on the next activate. */
 
-var VERSION = 'v6';
+var VERSION = 'v7';
+var BASE = '/omarchy-radio';
 var SHELL = 'omarchy-radio-' + VERSION;
-var PAGE = '/index.html';
+var PAGE = BASE + '/index.html';
 
 var ASSETS = [
-  '/',
+  BASE + '/',
   PAGE,
-  '/playlist',
-  '/podcast',
-  '/site.webmanifest',
+  BASE + '/playlist',
+  BASE + '/podcast',
+  BASE + '/site.webmanifest',
   /* The deck and its stylesheet are deliberately not here. Their addresses
      carry a stamp of their contents — /_astro/<name>.<hash>.js, written by
-     the bundler — so they cannot be listed by name from in here, and do not
-     need to be: a stamped address is cached the first time a page asks for
-     it, and a changed file is a new address that misses and goes to the
-     network. That is what keeps a cached deck from ever being served against
-     a page it no longer fits. */
-  '/assets/fonts/jetbrains-mono-latin.woff2',
-  '/assets/fonts/space-grotesk-latin.woff2',
-  '/assets/fonts/vt323-latin.woff2',
-  '/assets/images/favicon.svg',
-  '/assets/images/icon-192.png',
-  '/assets/images/icon-512.png',
-  '/assets/images/apple-touch-icon.png',
-  '/tracks/playlist.json',
-  '/stories/feed.rss'
+     the bundler, so a page cached before a deploy can never be served a deck
+     it no longer fits. */
+  BASE + '/assets/fonts/jetbrains-mono-latin.woff2',
+  BASE + '/assets/fonts/space-grotesk-latin.woff2',
+  BASE + '/assets/fonts/vt323-latin.woff2',
+  BASE + '/assets/images/favicon.svg',
+  BASE + '/assets/images/icon-192.png',
+  BASE + '/assets/images/icon-512.png',
+  BASE + '/assets/images/apple-touch-icon.png',
+  BASE + '/tracks/playlist.json',
+  BASE + '/stories/feed.rss'
 ];
 
 self.addEventListener('install', function (e) {

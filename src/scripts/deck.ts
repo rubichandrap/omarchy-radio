@@ -12,7 +12,7 @@
  */
 
 import {
-  CANON, LYRICS_DIR, SHOW, SHOW_LYRICS, SHOW_PODCAST, STATION,
+  BASE, CANON, LYRICS_DIR, SHOW, SHOW_LYRICS, SHOW_PODCAST, STATION,
   STORIES_FEED, STORIES_TAG, SHOW_HOME as STORIES_HOME,
   TRACKS_DIR, TRACKS_MANIFEST,
 } from '../lib/site.ts';
@@ -1462,7 +1462,7 @@ function indexOfKey(list: Item[], key: string): number {
   return -1;
 }
 
-function permalink(t: Item): string { return location.origin + '/' + t.key; }
+function permalink(t: Item): string { return location.origin + BASE + '/' + t.key; }
 
 /* Tolerant on the way in, exact on the way out. A trailing slash, the
    .html of the file that served the page, a capital letter, an escaped
@@ -1474,12 +1474,12 @@ function permalink(t: Item): string { return location.origin + '/' + t.key; }
 function parseRoute(pathname: string, hash: string): Route {
   var p = String(pathname || '/');
   try { p = decodeURIComponent(p); } catch (e) { /* leave it as typed */ }
+  if (BASE && p.toLowerCase().startsWith(BASE)) p = p.slice(BASE.length) || '/';
   p = p.toLowerCase()
     .replace(/\/index\.html?$/, '/')
     .replace(/\.html?$/, '')
     .replace(/\/+$/, '');
   var seg = p.split('/').filter(Boolean);
-
   if (!seg.length) return fromHash(hash);
   var kind = seg[0] as Kind;
   if (!LISTS[kind] || seg.length > 2) return stray();
@@ -1526,8 +1526,8 @@ function here(): Route { return parseRoute(location.pathname, location.hash); }
 function wantedPath(): string {
   var it = nowItem();
   var showing = S.tab === 'stories' ? 'podcast' : 'playlist';
-  if (chose && it && it.kind === showing) return '/' + it.key;
-  return S.route ? '/' + S.route : '/';
+  var rel = (chose && it && it.kind === showing) ? '/' + it.key : (S.route ? '/' + S.route : '/');
+  return (BASE + rel).replace(/\/+$/, '') || '/';
 }
 
 /* Pressing a row is a navigation and earns a history entry: back returns
@@ -1550,7 +1550,11 @@ function syncRoute(how?: How) {
 // claiming to be a different song than the one it is playing.
 function paintCanonical() {
   var link = document.querySelector('link[rel="canonical"]');
-  if (link) link.setAttribute('href', CANON + wantedPath());
+  if (!link) return;
+  var it = nowItem();
+  var showing = S.tab === 'stories' ? 'podcast' : 'playlist';
+  var rel = (chose && it && it.kind === showing) ? '/' + it.key : (S.route ? '/' + S.route : '/');
+  link.setAttribute('href', CANON + rel);
 }
 
 /* Applies a route that came from outside: a link, the back button, a path

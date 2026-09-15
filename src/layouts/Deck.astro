@@ -5,7 +5,7 @@
  * item baked into it, and which list the panel is showing with which row
  * picked out. Those are the props.
  */
-import { CANON } from '../lib/site.ts';
+import { BASE, CANON } from '../lib/site.ts';
 import { headMeta, type Head } from '../lib/seo.ts';
 import { siteGraph } from '../lib/schema.ts';
 import Bar from '../components/Bar.astro';
@@ -78,14 +78,14 @@ const seedJson = seed ? JSON.stringify(seed).replace(/</g, '\\u003c') : '';
 <meta name="twitter:image" content={`${CANON}/assets/images/opengraph.png`} />
 <meta name="twitter:image:alt" content="Omarchy Radio" />
 
-<link rel="icon" href="/assets/images/favicon.svg" type="image/svg+xml" />
-<link rel="icon" href="/assets/images/favicon-32.png" sizes="32x32" type="image/png" />
-<link rel="apple-touch-icon" href="/assets/images/apple-touch-icon.png" />
-<link rel="manifest" href="/site.webmanifest" />
+<link rel="icon" href={`${BASE}/assets/images/favicon.svg`} type="image/svg+xml" />
+<link rel="icon" href={`${BASE}/assets/images/favicon-32.png`} sizes="32x32" type="image/png" />
+<link rel="apple-touch-icon" href={`${BASE}/assets/images/apple-touch-icon.png`} />
+<link rel="manifest" href={`${BASE}/site.webmanifest`} />
 
-<link rel="preload" href="/assets/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="preload" href="/assets/fonts/vt323-latin.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="preload" href="/assets/fonts/space-grotesk-latin.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href={`${BASE}/assets/fonts/jetbrains-mono-latin.woff2`} as="font" type="font/woff2" crossorigin />
+<link rel="preload" href={`${BASE}/assets/fonts/vt323-latin.woff2`} as="font" type="font/woff2" crossorigin />
+<link rel="preload" href={`${BASE}/assets/fonts/space-grotesk-latin.woff2`} as="font" type="font/woff2" crossorigin />
 
 <script is:inline>
 /* Sets the canvas fit factor before first paint so the layout never snaps

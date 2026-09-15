@@ -7,7 +7,7 @@
  */
 
 import { dateLabel, lengthLabel, plural } from './format.ts';
-import { STATION } from './site.ts';
+import { BASE, STATION } from './site.ts';
 import type { Item, Show } from './item.ts';
 import type { Kind } from './slug.ts';
 
@@ -56,8 +56,8 @@ function songNote(tracks: Item[], only: Item | null): string {
   if (!tracks.length) return 'nothing in the playlist yet';
   const count = `${plural(tracks.length, 'track')}, on repeat`;
   if (!only) return count;
-  if (tracks.length === 1) return `<a href="/playlist">${count}</a>`;
-  return `one of <a href="/playlist">${count}</a>`;
+  if (tracks.length === 1) return `<a href="${BASE}/playlist">${count}</a>`;
+  return `one of <a href="${BASE}/playlist">${count}</a>`;
 }
 
 /* The show is not ours, so the note says whose it is and where it lives — the
@@ -66,7 +66,7 @@ function episodeNote(eps: Item[], show: Show, only: Item | null): string {
   let count = eps.length ? plural(eps.length, 'episode') : 'reading the feed…';
   if (only && eps.length) {
     const many = eps.length > 1 ? 'one of ' : '';
-    count = `${many}<a href="/podcast">${plural(eps.length, 'episode')}</a>`;
+    count = `${many}<a href="${BASE}/podcast">${plural(eps.length, 'episode')}</a>`;
   }
   const label = show.home.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   return `${count} &middot; <a href="${escapeAttr(show.home)}" target="_blank" rel="noopener">${escapeText(label)}</a>`;

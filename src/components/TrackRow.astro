@@ -10,6 +10,7 @@
  * Kept on one line on purpose. The spans inside a row are inline, so a
  * newline between two of them is a space on the page.
  */
+import { BASE } from '../lib/site.ts';
 import type { Item } from '../lib/item.ts';
 
 interface Props {
@@ -25,7 +26,7 @@ interface Props {
 }
 
 const { item, number, sub, on = false } = Astro.props;
-const path = `/${item.key}`;
+const path = `${BASE}/${item.key}`;
 const n = String(number).padStart(2, '0');
 ---
 <li class:list={[{ 'is-on': on }]}><a class:list={['track', { 'is-on': on }]} href={path}><span class="tr-n">{n}</span><span class="tr-t"><span class="tr-line"><span class="tr-title">{item.title}</span><span class="tr-ex" hidden={!item.explicit}>explicit</span></span><span class="tr-artist">{sub}</span></span><span class="tr-s"><span class="tr-st"></span><span class="tr-c" hidden></span></span></a><a class="tr-link" href={path} title="Permalink &#8212; press to copy" aria-label={`Copy link to ${item.title}`}>#</a></li>

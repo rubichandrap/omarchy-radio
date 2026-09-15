@@ -1,16 +1,17 @@
 /* What the site calls itself, in the one place both the build and the deck
    can read it. */
 
-export const CANON = 'https://radio.omarchy.org';
+export const BASE = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
+export const CANON = (import.meta.env.SITE || 'https://rubichandrap.github.io').replace(/\/+$/, '') + BASE;
 
 export const SITE_DESC =
   'The community playlist for the Omarchy desktop. Songs about Arch, ' +
   'Hyprland and dotfiles, every one of them sent in as a pull request.';
 
 /** Where the songs live, so they can arrive by pull request. */
-export const TRACKS_DIR = '/tracks/';
-export const TRACKS_MANIFEST = '/tracks/playlist.json';
-export const LYRICS_DIR = '/tracks/lyrics/';
+export const TRACKS_DIR = BASE + '/tracks/';
+export const TRACKS_MANIFEST = BASE + '/tracks/playlist.json';
+export const LYRICS_DIR = BASE + '/tracks/lyrics/';
 
 /* Omarchy Stories is the show the community makes about running this desktop.
    Nothing about it lives in this repo; the feed is mirrored in hourly by
@@ -22,7 +23,7 @@ export const LYRICS_DIR = '/tracks/lyrics/';
 export const SHOW = 'Omarchy Stories';
 export const SHOW_HOME = 'https://omarchystories.org';
 /** The copy the deck reads, mirrored into this repo and served same-origin. */
-export const STORIES_FEED = '/stories/feed.rss';
+export const STORIES_FEED = BASE + '/stories/feed.rss';
 /* The show's own feed, on its host. This is the address to subscribe at — a
    podcast app should follow the show, not our mirror of it, and the host's
    download figures should go on counting what they always counted. It is what
