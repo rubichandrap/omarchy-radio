@@ -39,7 +39,8 @@ function listDirectoryIndexes() {
    with a 301 to /playlist/song/, and the canonical links, the sitemap and the
    address the deck writes as it plays all name the slash-free spelling. */
 export default defineConfig({
-  site: 'https://radio.omarchy.org',
+  site: 'https://rubichandrap.github.io',
+  base: '/omarchy-radio',
   integrations: [listDirectoryIndexes()],
   trailingSlash: 'never',
   build: {
