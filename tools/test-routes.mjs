@@ -267,9 +267,10 @@ function foldRule() {
 const GLYPHS = new Set('\u25b6\u25c0\u25a0\u2759\u25bc\u25b2\u25be\u25b8\u2197');
 
 function iconRule() {
-  // The four the transport needs, both faces of the two that have two, and
-  // the arrow that says a link leaves the site.
+  // The transport's controls, both faces of the ones that have two, and the
+  // arrow that says a link leaves the site.
   for (const name of ['play', 'pause', 'stop', 'prev', 'next',
+                      'shuffle', 'repeat', 'repeat-one',
                       'caret-down', 'caret-up', 'caret-right', 'arrow-ne']) {
     ok(ICONS[name], `there is no icon called ${name}`);
   }

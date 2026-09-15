@@ -6,9 +6,10 @@
  * src/lib/slug.ts, which the build reads too.
  *
  * There is no live stream. The playlist is the station: it starts itself on
- * arrival, plays in order, and goes round again at the end. Everything the
- * deck plays is a file in this repo, which is why every one of them has an
- * address of its own.
+ * arrival and walks its play order — the list's own, or a shuffled one —
+ * coming round again at the end unless the repeat mode says otherwise.
+ * Everything the deck plays is a file in this repo, which is why every one
+ * of them has an address of its own.
  */
 
 import {
@@ -44,6 +45,11 @@ var STORE_KEY = 'omarchy-radio-skin';
 var STORE_PIN = 'omarchy-radio-skin-pinned';
 var STORE_TRACKS = 'omarchy-radio-playlist';
 var STORE_STORIES = 'omarchy-radio-stories';
+/* What the deck does when an item ends. Kept, so the mode outlives the tab. */
+var STORE_REPEAT = 'omarchy-radio-repeat';
+/* Whether the order is a permutation of the list or the list's own. Kept
+   the same way, and for the same reason. */
+var STORE_SHUFFLE = 'omarchy-radio-shuffle';
 
 var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -58,6 +64,7 @@ var IDS = [
   'themeBtn', 'themeMenu',
   'themeCaret', 'skinName', 'stationLabel', 'srcLabel',
   'marq', 'artist', 'curTime', 'durTime', 'vis', 'prev', 'toggle', 'stop', 'next',
+  'shuffle', 'repeat',
   'seek', 'seekFill', 'seekHead', 'volKnob', 'volRot', 'volLabel',
   'playlistKind', 'playlistName', 'tracks', 'trHead', 'playlistNote',
   'status', 'seg', 'tabSongs', 'tabPodcast',
@@ -84,6 +91,9 @@ type Tab = 'songs' | 'stories';
 /** What the listener last asked for, which is what a dropped track is judged
     against: still 'play' means reconnect, 'pause' means leave it alone. */
 type Intent = 'idle' | 'play' | 'pause' | 'stop';
+/** What the deck does when an item ends: `all` comes round again, `one` plays
+    the same item over, `off` stops at the end of the order. */
+type Repeat = 'off' | 'all' | 'one';
 
 interface State {
   mode: Mode;
@@ -100,6 +110,13 @@ interface State {
   epOpen: boolean;
   feedErr: boolean;
   playing: boolean;
+  /** What an item running out means, which is what the repeat button says
+      and the note under the list repeats. Read from the store, once, below. */
+  repeat: Repeat;
+  /** Whether the play order is a permutation of the list rather than the
+      list's own order, which is what the shuffle button says. Read from the
+      store, once, below. */
+  shuffle: boolean;
   vol: number;
   cur: number;
   dur: number;
@@ -127,6 +144,8 @@ var S: State = {
   epOpen: true,
   feedErr: false,
   playing: false,
+  repeat: 'all',
+  shuffle: false,
   vol: 0.8,
   cur: 0,
   dur: 0,
@@ -162,6 +181,22 @@ try {
 
 var start = pinned || restored;
 if (start && SKINS.some(function (k) { return k.name === start; })) S.skin = start;
+
+/* What the deck does when an item ends, read once the way the theme is: a
+   mode is a setting, and nothing but the repeat button writes it. An unknown
+   word — an older deck's, a hand-edited store — is ignored rather than
+   trusted to mean something. */
+try {
+  var keptRepeat = localStorage.getItem(STORE_REPEAT) || '';
+  if (keptRepeat === 'off' || keptRepeat === 'all' || keptRepeat === 'one') S.repeat = keptRepeat;
+} catch (e) { /* private mode */ }
+
+/* Whether the order is shuffled, read the way the repeat mode is: a setting,
+   and nothing but the shuffle button writes it. Anything but `on` — an older
+   deck's word, a hand-edited store — is the default, which is off. */
+try {
+  if (localStorage.getItem(STORE_SHUFFLE) === 'on') S.shuffle = true;
+} catch (e) { /* private mode */ }
 
 /** Whether the desktop's theme, when there is one, is what to wear. */
 function followsDesktop(): boolean {
@@ -612,10 +647,11 @@ function makeAudio(analysed: boolean): HTMLMediaElement {
     paintClock();
     syncLyrics();
   });
-  // The end of one is the start of the next, and the end of the last is
-  // the start of the first. That is the whole of the rotation.
+  // What an item running out means is the repeat mode's business: round
+  // again, the same one from the top, or the end of the playlist. The mode
+  // is asked here and nowhere else.
   a.addEventListener('ended', function () {
-    if (mine()) next();
+    if (mine()) advance();
   });
   a.addEventListener('playing', function () {
     if (!mine()) return;
@@ -792,6 +828,270 @@ function wantedSrc(): string {
   return it ? it.url : '';
 }
 
+/* ── the play order ──────────────────────────────────────
+   What advances is an order rather than the list's own numbering: a
+   permutation of the playing list's indices, walked from `pos`. While
+   shuffle is off the order is the list's own order, so walking it is the
+   arithmetic the deck has always done and none of this is visible. The
+   point of walking an order at all is that a mode can change what the
+   order says without every path that advances having to know about it.
+
+   While shuffle is on the order is a cycle: every item once, and then a new
+   permutation. The items at order[0..pos] are the ones that cycle has had —
+   what a redraw keeps behind the deck, so nothing heard this time round
+   comes back before the cycle is out. */
+
+/** A permutation of the playing list's indices; the list's own order while
+    shuffle is off. Drawn by anchor(), by setShuffle() and by step() at the
+    end of a cycle — and by nothing else. */
+var order: number[] = [];
+/** Where the deck stands in that order. What plays is order[pos], which is
+    the item S.ti names. */
+var pos = 0;
+/** The list the order was drawn from. A reload arrives as a new array, so a
+    reference is enough to know the order it leaves behind has gone stale. */
+var orderOf: Item[] | null = null;
+
+/** What an item is known by, for the comparisons a list that moved under
+    the deck has to be made in. */
+function keyOf(it: Item | null | undefined): string {
+  return (it && it.key) || '';
+}
+
+/** Whether the order standing in the deck is this list's own: drawn from it,
+    and as long as it. A reload arrives as a new array, which is the whole of
+    why the reference is kept. */
+function drawnFor(list: Item[]): boolean {
+  return orderOf === list && order.length === list.length;
+}
+
+/** The list's own order: what shuffle off walks. */
+function ownOrder(list: Item[]): number[] {
+  var o: number[] = [];
+  for (var n = 0; n < list.length; n++) o.push(n);
+  return o;
+}
+
+/** The same items in no order in particular, on a copy: Fisher-Yates, which
+    is a dozen lines and needs nothing installed. */
+function shuffled(from: number[]): number[] {
+  var out = from.slice();
+  for (var i = out.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var held = out[i]!;
+    out[i] = out[j]!;
+    out[j] = held;
+  }
+  return out;
+}
+
+/* The cycle walked so far, by key: order[0..pos], the item the deck stands
+   on included. Keys rather than indices, because what a redraw keeps has to
+   survive a list that has moved or changed under it. Nothing walked, when
+   the order was never this list's: its indices name other items. */
+function walkedKeys(list: Item[]): string[] {
+  var keys: string[] = [];
+  if (!drawnFor(list)) return keys;
+  for (var n = 0; n <= pos && n < order.length; n++) keys.push(keyOf(list[order[n]!]));
+  return keys;
+}
+
+/* The order, drawn around the item at `i`: the cycle already walked keeps
+   its place behind the deck — by key, so a list that has moved under it
+   cannot leave the order naming the wrong items — and the rest of the list
+   is shuffled into what is left. The item at `i` is left out of the walked
+   part and put where the deck stands, so a row pressed while the cycle has
+   already had it becomes current rather than staying behind. */
+function drawOrder(list: Item[], i: number, walked: string[]) {
+  var current = keyOf(list[i]);
+  var heard: number[] = [];
+  var seen: Record<string, boolean> = {};
+  walked.forEach(function (k) {
+    if (!k || k === current || seen[k]) return;
+    var at = indexOfKey(list, k);
+    if (at < 0) return; // walked in a copy of the list that this one has lost
+    seen[k] = true;
+    heard.push(at);
+  });
+  var behind: Record<number, boolean> = {};
+  heard.forEach(function (n) { behind[n] = true; });
+  var rest: number[] = [];
+  for (var n = 0; n < list.length; n++) {
+    if (n !== i && !behind[n]) rest.push(n);
+  }
+  order = heard.concat([i], shuffled(rest));
+  orderOf = list;
+  pos = heard.length;
+  S.ti = i;
+}
+
+/* The deck on the i-th item of this list, the order put right around it.
+   Every path that moves the deck lands here: a row press, a followed
+   permalink, a list that reloaded underneath it, and the play that follows
+   a stop.
+
+   Most of those are the deck walking: the order already stands on this item
+   and there is nothing to do. When it is not — a row pressed out of turn,
+   shuffle turned on, a list that arrived changed — the cycle is drawn again
+   around the item. `walked` is the cycle as it stood, by key, for the one
+   caller that has just replaced the list under the deck and so cannot read
+   it any more. */
+function anchor(list: Item[], i: number, walked?: string[]) {
+  if (!S.shuffle || i < 0 || i >= list.length) {
+    order = ownOrder(list);
+    orderOf = list;
+    pos = i;
+    S.ti = i;
+    return;
+  }
+  if (drawnFor(list) && order[pos] === i) return;
+  drawOrder(list, i, walked || walkedKeys(list));
+}
+
+/* An order belongs to the list it was drawn from, and the deck can be
+   playing a different one than the order remembers — a refused autoplay
+   replayed after the listener moved on, say. Rather than walking an order
+   that names the other list's items, the deck is put back on its feet where
+   it stands. Anything that reads `pos` asks this first. */
+function realign(l: Item[]) {
+  if (!drawnFor(l) || order[pos] !== S.ti) anchor(l, S.ti);
+}
+
+/* A step of d along the order, wrapping at both ends: the last track runs
+   into the first one, and stepping back from the first reaches the last.
+   Stepping off the end is the end of a cycle while shuffle is on: a new one
+   is drawn, and the deck stands at its head. */
+function step(d: number): number {
+  var l = playingList();
+  if (!l.length) return -1;
+  realign(l);
+  var at = pos + d;
+  if (at >= order.length) {
+    if (S.shuffle) return newCycle(l);
+    at = 0;
+  } else if (at < 0) at = order.length - 1;
+  pos = at;
+  return order[pos]!;
+}
+
+/* The end of a cycle: the order is drawn again, the deck stands at its head,
+   and the one item the head may not be is the item that has just played — a
+   reshuffle that opens on the song that ended the last cycle is not a
+   reshuffle. */
+function newCycle(l: Item[]): number {
+  var last = keyOf(l[order[pos]!]);
+  var drawn = shuffled(ownOrder(l));
+  if (last && drawn.length > 1 && keyOf(l[drawn[0]!]) === last) {
+    var j = 1 + Math.floor(Math.random() * (drawn.length - 1));
+    var held = drawn[0]!;
+    drawn[0] = drawn[j]!;
+    drawn[j] = held;
+  }
+  order = drawn;
+  orderOf = l;
+  pos = 0;
+  S.ti = order[0]!;
+  return S.ti;
+}
+
+/* ── repeat ──────────────────────────────────────────────
+   What the deck does when an item runs out, which is the one thing the mode
+   decides. It is asked in the `ended` handler and nowhere else: a press is
+   not an ending, so next() and prev() go on wrapping in every mode. */
+
+/** The three, in the order the button walks them. */
+var REPEAT_MODES: Repeat[] = ['off', 'all', 'one'];
+
+function cycleRepeat() {
+  setRepeat(REPEAT_MODES[(REPEAT_MODES.indexOf(S.repeat) + 1) % REPEAT_MODES.length]!);
+}
+
+/* The note under the list is a claim about the mode in force, so a mode
+   change writes it again — unless the lyric sheet is open, which is using
+   that line for a sheet, or the find box is filtering, which is using it for
+   a count. */
+function repaintNote() {
+  if (!S.lyricsOpen && !S.query) paintTrackNote();
+}
+
+function setRepeat(m: Repeat) {
+  S.repeat = m;
+  try { localStorage.setItem(STORE_REPEAT, m); } catch (e) { /* private mode */ }
+  setStatus('repeat ' + m);
+  paintTransport();
+  repaintNote();
+}
+
+/* Whether the deck stands on the last item the order names. The order has to
+   belong to the list that is playing, or the answer is about the other list,
+   so this asks realign() first, the way step() does. */
+function atEndOfOrder(): boolean {
+  var l = playingList();
+  if (!l.length) return true;
+  realign(l);
+  return pos === order.length - 1;
+}
+
+/* Stand the deck at the head of the order, where the next play starts: list
+   index 0 while shuffle is off, and the first item of the permutation while
+   it is on — the head of the cycle that has just been played, which is
+   where "again, from the top" starts. */
+function standAtHead(l: Item[]) {
+  if (!drawnFor(l)) { anchor(l, 0); return; }
+  pos = 0;
+  S.ti = l.length ? order[0]! : 0;
+}
+
+/* The end of the order with the mode off: the deck stops, says so, and
+   stands at the head again — the next play starts the cycle over rather
+   than picking the item it has just finished back up. */
+function endOfOrder() {
+  intent = 'stop';
+  cancelReconnect();
+  armed = null;
+  audio.pause();
+  loadedSrc = ''; // so the next play loads the head rather than the tail
+  standAtHead(playingList());
+  S.playing = false;
+  S.cur = 0;
+  /* Named for the list that ended: an episode running out is not the songs
+     playlist running out, and CONTEXT.md keeps the two words apart. */
+  setStatus(S.mode === 'story' ? 'the episodes have ended' : 'the playlist has ended');
+  paintAll();
+  syncRoute('replace');
+}
+
+/* An item ended: the one place the repeat mode decides anything. */
+function advance() {
+  if (S.repeat === 'one') { play(wantedSrc(), S.mode, S.ti); return; }
+  if (S.repeat === 'off' && atEndOfOrder()) { endOfOrder(); return; }
+  next();
+}
+
+/* ── shuffle ─────────────────────────────────────────────
+   Whether the order is the list's own or a permutation of it. Like the
+   repeat mode it is state of the deck rather than of the address: the
+   listener's own setting, not a place to be sent to. */
+
+/* Shuffle on draws the cycle again from where the deck stands: the items it
+   has already had this time round stay behind it, the rest of the list is
+   shuffled into what is left, and what is playing goes on playing. Shuffle
+   off is the list's own order, taken up from the same item. */
+function setShuffle(on: boolean) {
+  var l = playingList();
+  S.shuffle = on;
+  if (nowItem()) {
+    if (on) drawOrder(l, S.ti, walkedKeys(l));
+    else anchor(l, S.ti);
+  }
+  try { localStorage.setItem(STORE_SHUFFLE, on ? 'on' : 'off'); } catch (e) { /* private mode */ }
+  setStatus('shuffle ' + (on ? 'on' : 'off'));
+  paintTransport();
+  repaintNote();
+}
+
+function toggleShuffle() { setShuffle(!S.shuffle); }
+
 function play(src: string, mode: Mode, ti: number) {
   intent = 'play';
   loadedSrc = src;
@@ -835,6 +1135,9 @@ function autostart(how?: How) {
 function playFrom(list: Item[], mode: Mode, i: number, how?: How) {
   var it = list[i];
   if (!it) return;
+  // Playing an item of a list is standing on it, which is what puts the
+  // deck in the order.
+  anchor(list, i);
   play(it.url, mode, i);
   syncRoute(how);
 }
@@ -868,7 +1171,10 @@ function toggle() {
   // Pressed play before anything has started, or after a stop: the
   // playlist is what play means here.
   if (!want) { autostart(); return; }
-  if (loadedSrc !== want) { play(want, S.mode, S.ti); return; }
+  // A stop is not a walk: the deck stands where it stood. Where a resume
+  // lands is asked of the order, so a mode that changes that — the end of a
+  // cycle, say — has one place to say so.
+  if (loadedSrc !== want) { anchor(playingList(), S.ti); play(want, S.mode, S.ti); return; }
   if (ctx && ctx.state === 'suspended') ctx.resume();
   var p = audio.play();
   if (p && p.catch) p.catch(function () {});
@@ -891,15 +1197,10 @@ function stop() {
 // These step whichever list is playing, and wrap: the last track runs into
 // the first one. Transport rather than navigation, so they leave the
 // history and — unless the listener had named a song — the address alone.
-function next() {
-  var l = playingList();
-  if (l && l.length) playFrom(l, S.mode, (S.ti + 1) % l.length);
-}
+// An empty list steps to nothing, which playFrom() already refuses.
+function next() { playFrom(playingList(), S.mode, step(1)); }
 
-function prev() {
-  var l = playingList();
-  if (l && l.length) playFrom(l, S.mode, (S.ti - 1 + l.length) % l.length);
-}
+function prev() { playFrom(playingList(), S.mode, step(-1)); }
 
 /* ── autoplay ────────────────────────────────────────
    Joining the site is the tune-in: the deck should already be playing by the
@@ -1199,10 +1500,28 @@ function parseFeed(text: string): Feed {
 }
 
 function applyFeed(f: Feed) {
+  /* The episode playing keeps playing. A feed that lands with a newer
+     episode on top has moved everything below it, so the deck is anchored
+     on its item by key rather than left standing at an index that now names
+     a different one. An episode the feed no longer carries leaves it where
+     it was; either way the order is rebuilt for this list. */
+  var open = keyOf(S.mode === 'story' ? S.eps[S.ti] : null);
+  var was = S.ti;
+  /* The cycle, read before the feed replaces the list under the deck: the
+     order is drawn again around the episode that was playing, by key, so
+     an episode the feed has added or dropped cannot move it onto another. */
+  var walked = walkedKeys(S.eps);
   S.show = { name: f.show, link: f.link };
   S.eps = f.episodes || [];
   assignSlugs(S.eps, 'podcast');
-  if (S.tab === 'stories') paintTracks();
+  if (open) {
+    var i = indexOfKey(S.eps, open);
+    anchor(S.eps, i >= 0 ? i : was, walked);
+  }
+  /* The lit row, the readout and the marquee all read the deck's place, so
+     a place that moved is a repaint rather than a stale number on screen. */
+  if (S.ti !== was) paintAll();
+  else if (S.tab === 'stories') paintTracks();
 }
 
 function readStories(): Feed | null {
@@ -1278,6 +1597,10 @@ function loadTracks() {
     // What tuneIn() started, if anything, named by the one thing that
     // survives a reordering.
     var open = S.mode === 'track' && S.tracks[S.ti] ? S.tracks[S.ti].key : '';
+    /* And the cycle it is walking, read now, while the indices still name
+       these items: the manifest is about to replace the list, and the order
+       is drawn again around the item that was playing. */
+    var walked = walkedKeys(S.tracks);
     var waiting = linkPending;
     applyManifest(j);
     saveManifest(j);
@@ -1298,7 +1621,11 @@ function loadTracks() {
     if (open) {
       var i = indexOfKey(S.tracks, open);
       if (i < 0) { autostart('replace'); return; }
-      if (i !== S.ti) { S.ti = i; paintAll(); }
+      // A list reloaded is a list the order is rebuilt around, or the deck
+      // goes on standing in the list as it used to be.
+      var moved = i !== S.ti;
+      anchor(S.tracks, i, walked);
+      if (moved) paintAll();
     }
 
     /* And on where its file is. A slug comes from the title, so a song whose
@@ -1404,6 +1731,16 @@ function paintTransport() {
      say the same two things. */
   el.toggle.classList.toggle('is-playing', S.playing);
   el.toggle.setAttribute('aria-label', S.playing ? 'Pause' : 'Play');
+  /* The shuffle button: one state, said twice — the accent for the eye and
+     the accessible name for everything else. */
+  el.shuffle.setAttribute('aria-pressed', S.shuffle ? 'true' : 'false');
+  el.shuffle.setAttribute('aria-label', 'Shuffle: ' + (S.shuffle ? 'on' : 'off'));
+  /* The repeat button: which face it wears, whether the mode is on at all,
+     and which of the three it is. Two of the three share a face, so the
+     accessible name is where that difference lives. */
+  el.repeat.classList.toggle('is-one', S.repeat === 'one');
+  el.repeat.setAttribute('aria-pressed', S.repeat === 'off' ? 'false' : 'true');
+  el.repeat.setAttribute('aria-label', 'Repeat mode: ' + S.repeat);
   el.volRot.style.transform = 'rotate(' + (-135 + S.vol * 270) + 'deg)';
   el.volLabel.textContent = String(Math.round(S.vol * 100));
   el.volKnob.setAttribute('aria-valuenow', String(Math.round(S.vol * 100)));
@@ -1911,8 +2248,15 @@ function paintTrackNote(shown = -1) {
     return;
   }
   if (S.tab === 'stories') { paintStoryNote(); return; }
+  /* The phrases are the settings', and the repeat one is absent when the
+     deck will simply stop at the end: a count is a count, while "shuffled"
+     and "on repeat" are promises about what happens next. */
+  var phrase = (S.shuffle ? ', shuffled' : '') +
+    (S.repeat === 'all' ? ', on repeat'
+      : S.repeat === 'one' ? ', repeating one'
+      : '');
   el.playlistNote.textContent = S.tracks.length
-    ? S.tracks.length + ' tracks, on repeat'
+    ? S.tracks.length + ' tracks' + phrase
     : 'nothing in the playlist yet';
 }
 
@@ -2188,9 +2532,9 @@ function frame() {
 
   if (analyser && freq && analysing()) {
     analyser.getByteFrequencyData(freq);
-    var step = Math.floor(freq.length * 0.7 / n) || 1;
+    var bins = Math.floor(freq.length * 0.7 / n) || 1;
     for (var i = 0; i < n; i++) {
-      var v = (freq[i * step] || 0) / 255;
+      var v = (freq[i * bins] || 0) / 255;
       lev[i] = Math.max(v, lev[i]! * 0.86);
     }
   } else {
@@ -2291,6 +2635,8 @@ function boot() {
   el.stop.addEventListener('click', stop);
   el.next.addEventListener('click', next);
   el.prev.addEventListener('click', prev);
+  el.shuffle.addEventListener('click', toggleShuffle);
+  el.repeat.addEventListener('click', cycleRepeat);
   el.lyricsBtn.addEventListener('click', toggleLyrics);
 
   el.find.addEventListener('input', function () {
@@ -2340,6 +2686,20 @@ function boot() {
     var t = e.target;
     if (t instanceof Element && t.matches('input, textarea, [contenteditable]')) return;
     if (e.code === 'Space') { toggle(); e.preventDefault(); }
+    /* The shuffle button's key, on the same terms as the find box's: a
+       modifier means the listener is asking the browser for something else,
+       and ctrl+S is a save. */
+    if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      toggleShuffle();
+      e.preventDefault();
+    }
+    /* The repeat button's key, on the same terms: a modifier means the
+       listener is asking the browser for something else, and ctrl+R is a
+       reload. */
+    if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      cycleRepeat();
+      e.preventDefault();
+    }
     /* The terminal's own binding for this, and the box says so. A modifier
        means the listener is asking the browser for something else. */
     if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {

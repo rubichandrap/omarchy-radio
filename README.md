@@ -30,8 +30,8 @@ Full credit belongs to [omacom/radio.omarchy.org](https://github.com/omacom/radi
 
 | Feature | Status | Description |
 |---|---|---|
-| **Shuffle Mode** | In Progress | Randomize playback order with unvisited history tracking (no immediate repeats) |
-| **Repeat Modes** | In Progress | Cycle between Repeat Off, Repeat One (loop track), and Repeat All (loop queue/playlist) |
+| **Shuffle Mode** | Active | Walk a shuffled play order: every track once per cycle, a fresh draw each time |
+| **Repeat Modes** | Active | Cycle between Repeat Off, Repeat One (loop track), and Repeat All (loop playlist) |
 | **Playback Queue** | In Progress | "Play Next" and "Add to Queue" actions without interrupting the current track |
 | **Custom Playlists** | In Progress | Create, manage, and switch between curated subsets of tracks |
 | **Terminal Theme Sync** | Active | Dynamic integration with desktop terminal colors (`colors.toml` via `omarchy-theme-sync`) |
@@ -41,7 +41,7 @@ Full credit belongs to [omacom/radio.omarchy.org](https://github.com/omacom/radi
 | **Instant Search (`/`)** | Active | Real-time fuzzy filter over titles and artists with diacritic folding |
 | **Podcast Feed** | Active | Mirrored feed from Omarchy Stories with chapter jumping and permalinks |
 | **Headless Autoplay** | Active | Zero-audio-restriction playback using a headless `<video>` element |
-| **Persistent State** | Planned | Retain active theme, shuffle/repeat preferences, queue, and volume across page reloads |
+| **Persistent State** | In Progress | Retain the theme and the shuffle/repeat settings across reloads; queue and volume still to come |
 
 ---
 
@@ -83,7 +83,7 @@ npm run test:browser
 
 | Path | Purpose |
 |---|---|
-| `src/scripts/deck.ts` | Player core: audio lifecycle, routing, playlist/queue state, transport controls |
+| `src/scripts/deck.ts` | The deck: audio lifecycle, routing, the two lists, the play order and the transport |
 | `src/scripts/theme.ts` | 24 themes, 4-seed derivations (`bg`, `fg`, `ac`, `bd`), CSS custom property injection |
 | `src/scripts/omarchy-theme.ts` | Live synchronization with desktop terminal themes |
 | `src/scripts/field.ts` | 8×8 Bayer dither background canvas and audio spectrum analyser |
