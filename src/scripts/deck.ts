@@ -928,8 +928,7 @@ function drawOrder(list: Item[], i: number, walked: string[]) {
 /* The deck on the i-th item of this list, the order put right around it.
    Every path that moves the deck lands here: a row press, a followed
    permalink, a list that reloaded underneath it, and the play that follows
-   a stop. The index comes back, so a caller can hand it straight to
-   play().
+   a stop.
 
    Most of those are the deck walking: the order already stands on this item
    and there is nothing to do. When it is not — a row pressed out of turn,
@@ -937,17 +936,16 @@ function drawOrder(list: Item[], i: number, walked: string[]) {
    around the item. `walked` is the cycle as it stood, by key, for the one
    caller that has just replaced the list under the deck and so cannot read
    it any more. */
-function anchor(list: Item[], i: number, walked?: string[]): number {
+function anchor(list: Item[], i: number, walked?: string[]) {
   if (!S.shuffle || i < 0 || i >= list.length) {
     order = ownOrder(list);
     orderOf = list;
     pos = i;
     S.ti = i;
-    return i;
+    return;
   }
-  if (drawnFor(list) && order[pos] === i) return i;
+  if (drawnFor(list) && order[pos] === i) return;
   drawOrder(list, i, walked || walkedKeys(list));
-  return i;
 }
 
 /* An order belongs to the list it was drawn from, and the deck can be
@@ -1081,11 +1079,11 @@ function advance() {
    off is the list's own order, taken up from the same item. */
 function setShuffle(on: boolean) {
   var l = playingList();
+  S.shuffle = on;
   if (nowItem()) {
     if (on) drawOrder(l, S.ti, walkedKeys(l));
-    else { order = ownOrder(l); orderOf = l; pos = S.ti; }
+    else anchor(l, S.ti);
   }
-  S.shuffle = on;
   try { localStorage.setItem(STORE_SHUFFLE, on ? 'on' : 'off'); } catch (e) { /* private mode */ }
   setStatus('shuffle ' + (on ? 'on' : 'off'));
   paintTransport();
@@ -1176,7 +1174,7 @@ function toggle() {
   // A stop is not a walk: the deck stands where it stood. Where a resume
   // lands is asked of the order, so a mode that changes that — the end of a
   // cycle, say — has one place to say so.
-  if (loadedSrc !== want) { play(want, S.mode, anchor(playingList(), S.ti)); return; }
+  if (loadedSrc !== want) { anchor(playingList(), S.ti); play(want, S.mode, S.ti); return; }
   if (ctx && ctx.state === 'suspended') ctx.resume();
   var p = audio.play();
   if (p && p.catch) p.catch(function () {});
