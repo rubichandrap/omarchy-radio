@@ -1,8 +1,8 @@
 /* What the site calls itself, in the one place both the build and the deck
    can read it. */
 
-export const BASE = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
-export const CANON = (import.meta.env.SITE || 'https://rubichandrap.github.io').replace(/\/+$/, '') + BASE;
+export const BASE = ((typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/omarchy-radio').replace(/\/+$/, '');
+export const CANON = ((typeof import.meta !== 'undefined' && import.meta.env?.SITE) || 'https://rubichandrap.github.io').replace(/\/+$/, '') + BASE;
 
 export const SITE_DESC =
   'The community playlist for the Omarchy desktop. Songs about Arch, ' +

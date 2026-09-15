@@ -44,7 +44,7 @@ import { ICONS } from '../src/lib/icons.ts';
    through Vite, which plain node knows nothing about. This is the same code
    over the same two files. */
 import { parseEpisodes, parseTracks } from '../src/lib/lists.ts';
-import { CANON } from '../src/lib/site.ts';
+import { BASE as SITE_BASE, CANON } from '../src/lib/site.ts';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DIST = join(ROOT, 'dist');
@@ -90,6 +90,11 @@ function resolve(pathname) {
     rel = decodeURIComponent(pathname.split('?')[0].split('#')[0]).replace(/^\/+/, '');
   } catch {
     rel = pathname.replace(/^\/+/, '');
+  }
+  if (SITE_BASE) {
+    const pfx = SITE_BASE.replace(/^\/+/, '');
+    if (rel.startsWith(pfx + '/')) rel = rel.slice(pfx.length + 1);
+    else if (rel === pfx) rel = '';
   }
   // No climbing out of dist/.
   const full = join(DIST, rel);
@@ -186,7 +191,7 @@ const seed = (body) => {
 };
 /* The deck is bundled and named by a stamp of its contents, so a page loads
    it by an address that changes when it does. This is that address. */
-const loadsDeck = (body) => /<script type="module" src="\/_astro\/[^"]+\.js">/.test(body);
+const loadsDeck = (body) => new RegExp(`<script type="module" src="${SITE_BASE}/_astro/[^"]+\\.js">`).test(body);
 
 /* ── 1. the rule an address is spelled by ──────────────────────────────── */
 
@@ -410,18 +415,18 @@ async function main() {
       ok(title(body).includes(item.title), `${path}: the title tag is ${title(body)}`);
       if (item.kind === 'playlist') ok(s.file === item.file, `${path}: wrong file baked in`);
       else ok(s.url === item.url, `${path}: wrong audio url baked in`);
-      ok(body.includes(`href="${path}"`), `${path}: the page does not link to itself`);
+      ok(body.includes(`href="${SITE_BASE}${path}"`), `${path}: the page does not link to itself`);
     }
 
     // Home and the two lists carry the whole list, which is how a crawler
     // reaches every song without a sitemap.
     {
       const { body } = await get('/playlist');
-      for (const t of tracks) ok(body.includes(`href="/${t.key}"`), `/playlist does not link to ${t.key}`);
+      for (const t of tracks) ok(body.includes(`href="${SITE_BASE}/${t.key}"`), `/playlist does not link to ${t.key}`);
     }
     {
       const { body } = await get('/podcast');
-      for (const e of eps) ok(body.includes(`href="/${e.key}"`), `/podcast does not link to ${e.key}`);
+      for (const e of eps) ok(body.includes(`href="${SITE_BASE}/${e.key}"`), `/podcast does not link to ${e.key}`);
     }
     {
       const { body } = await get('/');
@@ -472,14 +477,16 @@ async function main() {
     }
 
     console.log('the shell the host needs');
-    for (const path of ['/CNAME', '/robots.txt', '/site.webmanifest', '/sw.js',
+    for (const path of ['/robots.txt', '/site.webmanifest', '/sw.js',
                         '/tracks/playlist.json', '/stories/feed.rss']) {
       const { status } = await get(path);
       ok(status === 200, `${path} answered ${status}`);
     }
     ok(existsSync(join(DIST, '.nojekyll')), 'dist/.nojekyll is missing');
-    ok((await readFile(join(DIST, 'CNAME'), 'utf8')).trim() === 'radio.omarchy.org',
-       'dist/CNAME does not name the site');
+    if (existsSync(join(DIST, 'CNAME'))) {
+      ok((await readFile(join(DIST, 'CNAME'), 'utf8')).trim().length > 0,
+         'dist/CNAME is empty');
+    }
   } finally {
     server.close();
   }
