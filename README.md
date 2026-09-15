@@ -83,7 +83,7 @@ npm run test:browser
 
 | Path | Purpose |
 |---|---|
-| `src/scripts/deck.ts` | Player core: audio lifecycle, routing, playlist/queue state, transport controls |
+| `src/scripts/deck.ts` | The deck: audio lifecycle, routing, the two lists, the play order and the transport |
 | `src/scripts/theme.ts` | 24 themes, 4-seed derivations (`bg`, `fg`, `ac`, `bd`), CSS custom property injection |
 | `src/scripts/omarchy-theme.ts` | Live synchronization with desktop terminal themes |
 | `src/scripts/field.ts` | 8×8 Bayer dither background canvas and audio spectrum analyser |

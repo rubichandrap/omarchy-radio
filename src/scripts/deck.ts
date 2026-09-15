@@ -6,9 +6,10 @@
  * src/lib/slug.ts, which the build reads too.
  *
  * There is no live stream. The playlist is the station: it starts itself on
- * arrival, plays in order, and goes round again at the end. Everything the
- * deck plays is a file in this repo, which is why every one of them has an
- * address of its own.
+ * arrival and walks its play order — the list's own, or a shuffled one —
+ * coming round again at the end unless the repeat mode says otherwise.
+ * Everything the deck plays is a file in this repo, which is why every one
+ * of them has an address of its own.
  */
 
 import {
@@ -1007,16 +1008,20 @@ function cycleRepeat() {
   setRepeat(REPEAT_MODES[(REPEAT_MODES.indexOf(S.repeat) + 1) % REPEAT_MODES.length]!);
 }
 
+/* The note under the list is a claim about the mode in force, so a mode
+   change writes it again — unless the lyric sheet is open, which is using
+   that line for a sheet, or the find box is filtering, which is using it for
+   a count. */
+function repaintNote() {
+  if (!S.lyricsOpen && !S.query) paintTrackNote();
+}
+
 function setRepeat(m: Repeat) {
   S.repeat = m;
   try { localStorage.setItem(STORE_REPEAT, m); } catch (e) { /* private mode */ }
   setStatus('repeat ' + m);
   paintTransport();
-  /* The note under the list is a claim about the mode, so it is written
-     again here — unless the lyric sheet is open, which is using that line
-     for a sheet, or the find box is filtering, which is using it for a
-     count. */
-  if (!S.lyricsOpen && !S.query) paintTrackNote();
+  repaintNote();
 }
 
 /* Whether the deck stands on the last item the order names. The order has to
@@ -1084,11 +1089,7 @@ function setShuffle(on: boolean) {
   try { localStorage.setItem(STORE_SHUFFLE, on ? 'on' : 'off'); } catch (e) { /* private mode */ }
   setStatus('shuffle ' + (on ? 'on' : 'off'));
   paintTransport();
-  /* The note under the list is a claim about the order, so it is written
-     again here — unless the lyric sheet is open, which is using that line
-     for a sheet, or the find box is filtering, which is using it for a
-     count. */
-  if (!S.lyricsOpen && !S.query) paintTrackNote();
+  repaintNote();
 }
 
 function toggleShuffle() { setShuffle(!S.shuffle); }

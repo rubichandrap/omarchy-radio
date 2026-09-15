@@ -427,10 +427,10 @@ worse than useless.
 
 Repeat and shuffle are two answers to one question — what happens next — and
 the deck answers it by walking an **order**: a permutation of the playing
-list, or the list's own order while shuffle is off, which is why none of the
-modes show up in the arithmetic that advances. `next()` and `prev()` step the
-order; the element's `ended` handler is the only place the repeat mode is
-asked. Shuffle is what makes the order a permutation, and it permutes the
+list, or the list's own order while shuffle is off, so `next()` and `prev()`
+step the same ring either way and the repeat mode is asked in one place, the
+element's `ended` handler. Shuffle is what makes the order a permutation, and
+it permutes the
 *play order* rather than the list on screen — numbers, permalinks and the
 pages the build writes stay still while what advances moves; the reasoning is
 [ADR 0001](docs/adr/0001-shuffle-permutes-play-order-not-the-list.md).
