@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "The site behind radio.omarchy.org — a community playlist that plays itself.",
+  "description": "Full-featured web radio deck for the Omarchy community with shuffle, repeat, queue, and terminal theme integration.",
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
