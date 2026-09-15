@@ -792,6 +792,49 @@ function wantedSrc(): string {
   return it ? it.url : '';
 }
 
+/* ── the play order ──────────────────────────────────────
+   What advances is an order rather than the list's own numbering: a
+   permutation of the playing list's indices, walked from `pos`. While
+   shuffle is off the order is the list's own order, so walking it is the
+   arithmetic the deck has always done and none of this is visible. The
+   point of walking an order at all is that a mode can change what the
+   order says without every path that advances having to know about it. */
+
+/** A permutation of the playing list's indices; its own order while
+    shuffle is off. Rebuilt by anchor() and by nothing else. */
+var order: number[] = [];
+/** Where the deck stands in that order. What plays is order[pos], which is
+    the item S.ti names. */
+var pos = 0;
+
+/* The deck on the i-th item of this list, the order rebuilt around it.
+   Every path that moves the deck lands here: a row press, a followed
+   permalink, a list that reloaded underneath it, and the play that follows
+   a stop. The index comes back, so a caller can hand it straight to
+   play(). */
+function anchor(list: Item[], i: number): number {
+  order = [];
+  for (var n = 0; n < list.length; n++) order.push(n);
+  pos = i;
+  S.ti = i;
+  return i;
+}
+
+/* A step of d along the order, wrapping at both ends: the last track runs
+   into the first one, and stepping back from the first reaches the last. */
+function step(d: number): number {
+  var l = playingList();
+  if (!l.length) return -1;
+  /* An order belongs to the list it was built from, and the deck can be
+     playing a different one than the order remembers — a refused autoplay
+     replayed after the listener moved on, say. Rather than stepping through
+     an order that names the other list's items, the deck is put back on its
+     feet where it stands. */
+  if (order.length !== l.length || order[pos] !== S.ti) anchor(l, S.ti);
+  pos = (pos + d + order.length) % order.length;
+  return order[pos]!;
+}
+
 function play(src: string, mode: Mode, ti: number) {
   intent = 'play';
   loadedSrc = src;
@@ -835,6 +878,9 @@ function autostart(how?: How) {
 function playFrom(list: Item[], mode: Mode, i: number, how?: How) {
   var it = list[i];
   if (!it) return;
+  // Playing an item of a list is standing on it, which is what puts the
+  // deck in the order.
+  anchor(list, i);
   play(it.url, mode, i);
   syncRoute(how);
 }
@@ -868,7 +914,10 @@ function toggle() {
   // Pressed play before anything has started, or after a stop: the
   // playlist is what play means here.
   if (!want) { autostart(); return; }
-  if (loadedSrc !== want) { play(want, S.mode, S.ti); return; }
+  // A stop is not a walk: the deck stands where it stood. Where a resume
+  // lands is asked of the order, so a mode that changes that — the end of a
+  // cycle, say — has one place to say so.
+  if (loadedSrc !== want) { play(want, S.mode, anchor(playingList(), S.ti)); return; }
   if (ctx && ctx.state === 'suspended') ctx.resume();
   var p = audio.play();
   if (p && p.catch) p.catch(function () {});
@@ -891,15 +940,10 @@ function stop() {
 // These step whichever list is playing, and wrap: the last track runs into
 // the first one. Transport rather than navigation, so they leave the
 // history and — unless the listener had named a song — the address alone.
-function next() {
-  var l = playingList();
-  if (l && l.length) playFrom(l, S.mode, (S.ti + 1) % l.length);
-}
+// An empty list steps to nothing, which playFrom() already refuses.
+function next() { playFrom(playingList(), S.mode, step(1)); }
 
-function prev() {
-  var l = playingList();
-  if (l && l.length) playFrom(l, S.mode, (S.ti - 1 + l.length) % l.length);
-}
+function prev() { playFrom(playingList(), S.mode, step(-1)); }
 
 /* ── autoplay ────────────────────────────────────────
    Joining the site is the tune-in: the deck should already be playing by the
@@ -1199,10 +1243,24 @@ function parseFeed(text: string): Feed {
 }
 
 function applyFeed(f: Feed) {
+  /* The episode playing keeps playing. A feed that lands with a newer
+     episode on top has moved everything below it, so the deck is anchored
+     on its item by key rather than left standing at an index that now names
+     a different one. An episode the feed no longer carries leaves it where
+     it was; either way the order is rebuilt for this list. */
+  var open = S.mode === 'story' && S.eps[S.ti] ? S.eps[S.ti]!.key || '' : '';
+  var was = S.ti;
   S.show = { name: f.show, link: f.link };
   S.eps = f.episodes || [];
   assignSlugs(S.eps, 'podcast');
-  if (S.tab === 'stories') paintTracks();
+  if (open) {
+    var i = indexOfKey(S.eps, open);
+    anchor(S.eps, i >= 0 ? i : was);
+  }
+  /* The lit row, the readout and the marquee all read the deck's place, so
+     a place that moved is a repaint rather than a stale number on screen. */
+  if (S.ti !== was) paintAll();
+  else if (S.tab === 'stories') paintTracks();
 }
 
 function readStories(): Feed | null {
@@ -1298,7 +1356,11 @@ function loadTracks() {
     if (open) {
       var i = indexOfKey(S.tracks, open);
       if (i < 0) { autostart('replace'); return; }
-      if (i !== S.ti) { S.ti = i; paintAll(); }
+      // A list reloaded is a list the order is rebuilt around, or the deck
+      // goes on standing in the list as it used to be.
+      var moved = i !== S.ti;
+      anchor(S.tracks, i);
+      if (moved) paintAll();
     }
 
     /* And on where its file is. A slug comes from the title, so a song whose
@@ -2188,9 +2250,9 @@ function frame() {
 
   if (analyser && freq && analysing()) {
     analyser.getByteFrequencyData(freq);
-    var step = Math.floor(freq.length * 0.7 / n) || 1;
+    var bins = Math.floor(freq.length * 0.7 / n) || 1;
     for (var i = 0; i < n; i++) {
-      var v = (freq[i * step] || 0) / 255;
+      var v = (freq[i * bins] || 0) / 255;
       lev[i] = Math.max(v, lev[i]! * 0.86);
     }
   } else {
