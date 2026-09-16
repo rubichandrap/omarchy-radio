@@ -32,7 +32,7 @@ when the pull request lands, along with its card and its sitemap entry.
 ## Albums
 
 The community's songs are the `omarchy` album. The `lofi` album is the
-[Open Lo-Fi](../README.md) release — songs from somewhere else, none of them
+[Open Lo-Fi](../../README.md) release — songs from somewhere else, none of them
 with an artist. The folders look like this:
 
 ```
@@ -128,7 +128,7 @@ Without a sheet it says so and points here.
 ## What to send
 
 - MP3, 320 kbps or lower. Keep it under 10 MB.
-- Your own creation, and set in the Omarchy universe. The [README](../README.md)
+- Your own creation, and set in the Omarchy universe. The [README](../../README.md)
   covers what that means.
 - Order in that album's `playlist.json` is the order in the player. New tracks
   go wherever fits, the list is roughly alphabetical by artist.
