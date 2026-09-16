@@ -1139,7 +1139,8 @@ a, button, [role="slider"] { -webkit-tap-highlight-color: transparent; }
   /* A row of its own here, and it keeps the thin box the desktop draws: it
      narrows the songs, the switch chooses the list, and the size says which
      is which before a press does. The links size to their words rather than
-     sharing the panel's width. */
+     sharing the panel's width — and the 44px target the touch-target block
+     below gives every `.seg-b` is the switch's, not this row's. */
   .albs { margin: 0 16px 12px; }
   .albs .seg-b { min-height: 0; }
 

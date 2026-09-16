@@ -34,8 +34,9 @@
        mode's own face after a reload
      - the shuffle order: a permutation of the list walked one row at a time,
        a new cycle opened on a different row, and the deck it survives
-     - the panel head on a phone: the heading and the switch share one row at
-       390px, the heading giving way with an ellipsis rather than wrapping
+     - the panel head on a phone: on each of the three pages the heading and
+       the switch share one row at 390px, the heading clipped as an ellipsis,
+       and a wide head draws it whole
      - an album is a place: every album answers at its own address at the site
        root with its rows, its title and its note, the selector over the songs
        marks the album the address names, the selector's links draw a smaller
@@ -535,13 +536,16 @@ async function panelHeadOnAPhone() {
         var title = head.querySelector('.panel-title');
         var btns = head.querySelector('.head-btns');
         var panel = document.querySelector('.playlist');
+        var cs = getComputedStyle(title);
         var box = function (el) {
           var r = el.getBoundingClientRect();
           return { l: r.left, r: r.right, t: r.top, b: r.bottom };
         };
         return title && btns
           ? { title: box(title), btns: box(btns), panel: box(panel),
-              truncated: title.scrollWidth > title.clientWidth + 1 }
+              words: title.scrollWidth, room: title.clientWidth,
+              ellipsis: cs.textOverflow === 'ellipsis' && cs.whiteSpace === 'nowrap',
+              clipped: title.scrollWidth > title.clientWidth + 1 }
           : null;
       })()`);
       await tab.send('Emulation.clearDeviceMetricsOverride');
@@ -551,22 +555,37 @@ async function panelHeadOnAPhone() {
       return out;
     };
 
-    const phone = await drawn(390);
-    if (ok(phone, 'the head is drawn at 390px')) {
-      /* One row: the two boxes share vertical space rather than stacking. */
-      const shared = Math.min(phone.title.b, phone.btns.b) -
-                     Math.max(phone.title.t, phone.btns.t);
-      ok(shared > 0,
-         `the switch shares the heading's row (${Math.round(shared)}px of the two boxes overlap)`);
-      ok(phone.btns.r <= phone.panel.r + 0.5,
-         `and stays inside the panel (${Math.round(phone.btns.r)} against ${Math.round(phone.panel.r)})`);
-      ok(phone.truncated,
-         'the heading, given less room than its words need, ends in an ellipsis');
-    }
+    /* The three pages that carry a heading of their own: the show's name is
+       the long one, an album's the one that says where the listener is. */
+    for (const page of ['/podcast', '/playlist', '/lofi']) {
+      await tab.go(page);
+      const s = await until(`the panel to name ${page}`, async () => {
+        const st = await tab.state();
+        return st.panel ? st : null;
+      });
+      if (!ok(s, `the panel names what ${page} shows`)) continue;
 
-    const wide = await drawn(1200);
-    if (ok(wide, 'the head is drawn at 1200px too')) {
-      ok(!wide.truncated, 'and on a wide one the whole heading is drawn');
+      for (const width of [390, 1200]) {
+        const m = await drawn(width);
+        const where = `${page} at ${width}px`;
+        if (!ok(m, `the head is drawn on ${where}`)) continue;
+        /* One row: the two boxes share vertical space rather than stacking. */
+        const shared = Math.min(m.title.b, m.btns.b) - Math.max(m.title.t, m.btns.t);
+        ok(shared > 0,
+           `on ${where} the switch shares the heading's row ` +
+           `(${Math.round(shared)}px of the two boxes overlap)`);
+        ok(m.btns.r <= m.panel.r + 0.5,
+           `and stays inside the panel (${Math.round(m.btns.r)} against ${Math.round(m.panel.r)})`);
+        if (width === 390) {
+          /* Less room than the words need, and the box draws the cut as an
+             ellipsis — the clip alone would be a silent cut. */
+          ok(m.clipped && m.ellipsis,
+             `the heading ends in an ellipsis (${m.words}px of words in ${m.room}px, ` +
+             `text-overflow: ${m.ellipsis ? 'ellipsis' : 'none'})`);
+        } else {
+          ok(!m.clipped, `and the whole heading is drawn (${m.words}px of words in ${m.room}px)`);
+        }
+      }
     }
   } finally {
     await tab.close();
@@ -645,7 +664,8 @@ async function albumsAtTheirAddresses({ songs, albums }) {
           return {
             pad: [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft].join(' '),
             fs: cs.fontSize,
-            w: parseFloat(cs.width), h: parseFloat(cs.height)
+            w: parseFloat(cs.width), h: parseFloat(cs.height),
+            t: el.getBoundingClientRect().top
           };
         };
         var links = Array.prototype.map.call(document.querySelectorAll('#albs a.seg-b'), shot);
@@ -684,22 +704,34 @@ async function albumsAtTheirAddresses({ songs, albums }) {
        the thin box the desktop draws — sized to their words, starting at the
        panel's left edge — while the switch's links keep the 44px target. The
        two rows never read as twins. */
-    for (const width of [900, 800]) {
+    for (const width of [900, 800, 390]) {
       const slim = await drawn(width);
       if (!ok(slim, `the album row is drawn at ${width}px too`)) continue;
       ok(slim.album.every((l) => l.h < slim.swap.h),
          `at ${width}px every album link stands shorter than the switch ` +
          `(${slim.album.map((l) => l.h).join('/')} against ${slim.swap.h})`);
-      ok(slim.album.every((l) => l.pad === '3px 8px 3px 8px' && l.fs === slim.swap.fs),
-         `on the thinner box and the switch’s own type ` +
-         `(${slim.album.map((l) => l.pad).join(' / ')})`);
+      ok(slim.album.every((l) => l.pad === '3px 8px 3px 8px'),
+         `on the thinner padding (${slim.album.map((l) => l.pad).join(' / ')})`);
+      ok(slim.album.every((l) => l.fs === slim.swap.fs),
+         `and the switch's own type (${slim.album.map((l) => l.fs).join('/')} ` +
+         `against ${slim.swap.fs})`);
+      const tops = slim.album.map((l) => l.t);
+      ok(Math.max(...tops) - Math.min(...tops) <= 1,
+         `the links sharing one row (${tops.map((t) => Math.round(t)).join('/')})`);
       /* Sized to their words, the links stop sharing the row evenly: `all`
-         is a word, an album's name is longer. */
+         is a short word and an album's name is longer, a spread no even
+         share draws. */
       const widths = slim.album.map((l) => l.w);
       ok(Math.max(...widths) - Math.min(...widths) > 20,
-         `whose links size to their words, no longer an even share (${widths.join('/')})`);
+         `sized to their words, no longer an even share (${widths.join('/')})`);
+      /* A stretched row came out the panel minus the two 16px margins and
+         the box's own borders; a margin more than that says the row hugged
+         its words instead. */
+      ok(slim.row + 50 <= slim.panelBox.w,
+         `the row hugging its words rather than the panel's width ` +
+         `(${slim.row} in ${slim.panelBox.w})`);
       ok(Math.abs(slim.rowBox.l - (slim.panelBox.l + 16)) <= 1,
-         `and the row starts at the panel's left edge ` +
+         `starting at the panel's left edge ` +
          `(${Math.round(slim.rowBox.l)} against ${Math.round(slim.panelBox.l + 16)})`);
       ok(slim.swap.h === 44, 'while the switch keeps its 44px target');
     }
