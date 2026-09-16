@@ -26,6 +26,7 @@ import { SKINS, derive, type Skin, type Theme } from './theme.ts';
 import { DESKTOP, desktopName, watchDesktop } from './omarchy-theme.ts';
 import type { Item, Stamped } from '../lib/item.ts';
 import type { Kind } from '../lib/slug.ts';
+import type { Album, AlbumIndex } from '../lib/lists.ts';
 import {
   drawField, fieldPainted, initField, markFieldStale, sizeField,
 } from './field.ts';
@@ -1637,12 +1638,10 @@ function applyManifest(j: Manifest | null) {
    last visit paints the same list it always did. */
 interface Manifest { tracks?: Item[] }
 
-/* The albums, as public/tracks/albums.json declares them. Named here rather
-   than imported from src/lib/lists.ts, which parses the feed and carries
-   fast-xml-parser with it: the build reads that file with the parser in hand,
-   and a feed parser has no business in the browser bundle. */
-interface Album { slug: string; name: string }
-interface AlbumIndex { albums?: Album[] }
+/* The albums, as public/tracks/albums.json declares them: the shape
+   src/lib/lists.ts defines, imported above as a type. The import erases at
+   build time, so the feed parser that module carries stays out of the browser
+   bundle — the deck needs the shape, not the parsing. */
 
 function readManifest(): Manifest | null {
   try { return JSON.parse(localStorage.getItem(STORE_TRACKS) || 'null'); } catch (e) { return null; }
