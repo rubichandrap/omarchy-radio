@@ -2288,9 +2288,11 @@ function paintTracks() {
     /* A row is a link to the item it names: it can be opened in a tab of
        its own, copied out of the context menu, and read by anything that
        reads links. The press itself is still handled here, so following
-       one costs nothing of what is already playing. */
+       one costs nothing of what is already playing. The address is the
+       site's, base and all, the way the build writes it — a row the deck
+       draws is the same link the page arrived with. */
     var b = document.createElement('a');
-    b.href = '/' + tr.key;
+    b.href = BASE + '/' + tr.key;
     b.className = 'track' + (on ? ' is-on' : '');
     b.innerHTML =
       '<span class="tr-n"></span>' +
@@ -2351,7 +2353,7 @@ function paintTracks() {
     // The same address, as the thing it is: press it and it is on the
     // clipboard, hold a modifier and the browser opens it.
     var link = document.createElement('a');
-    link.href = '/' + tr.key;
+    link.href = BASE + '/' + tr.key;
     link.className = 'tr-link';
     link.textContent = '#';
     link.title = 'Permalink — press to copy';
