@@ -8,7 +8,7 @@
  */
 import type { GetStaticPaths } from 'astro';
 import Deck from '../../layouts/Deck.astro';
-import { readEpisodes, readTracks } from '../../lib/sources.ts';
+import { readEpisodes, readTracks, readAlbums } from '../../lib/sources.ts';
 import { isReservedSlug, seedOf } from '../../lib/lists.ts';
 import type { Item, Show } from '../../lib/item.ts';
 import { audioMeta } from '../../lib/seo.ts';
@@ -18,6 +18,7 @@ import { CANON } from '../../lib/site.ts';
 export const getStaticPaths = (() => {
   const tracks = readTracks();
   const show = readEpisodes();
+  const albums = readAlbums();
 
   for (const track of tracks) {
     if (isReservedSlug(track.key)) {
@@ -31,7 +32,12 @@ export const getStaticPaths = (() => {
 
   return tracks.map((track) => ({
     params: { slug: track.slug },
-    props: { track, tracks, show },
+    props: {
+      track, tracks, show,
+      /* The album the song is in, by name: the page says where the song comes
+         from, and every song is in exactly one. */
+      albumName: albums.find((a) => a.slug === track.album)?.name ?? '',
+    },
   }));
 }) satisfies GetStaticPaths;
 
@@ -39,9 +45,10 @@ interface Props {
   track: Item;
   tracks: Item[];
   show: Show;
+  albumName: string;
 }
 
-const { track, tracks, show } = Astro.props;
+const { track, tracks, show, albumName } = Astro.props;
 const path = `/${track.key}`;
 /* A song with no artist is named by its title alone: a byline for a name the
    file does not carry reads as a page about somebody who is not there. */
@@ -52,8 +59,9 @@ const audio = `${CANON}/${track.url.replace(/^\/+/, '')}`;
   head={{
     title: `${track.title}${byline} · Omarchy Radio`,
     description:
-      `${track.title}${byline}, on Omarchy Radio: a song about the Omarchy desktop, ` +
-      'made by somebody who runs it. Press play.',
+      `${track.title}${byline}, on Omarchy Radio: ` +
+      (albumName ? `a song from the ${albumName} album.` : 'a song from the playlist.') +
+      ' Press play.',
     path,
     ogType: 'music.song',
     extra: audioMeta(audio),

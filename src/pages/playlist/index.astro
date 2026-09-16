@@ -11,8 +11,9 @@ const show = readEpisodes();
   head={{
     title: 'The playlist · Omarchy Radio',
     description:
-      `Every song on Omarchy Radio, ${tracks.length} of them, each one made and sent in by ` +
-      'somebody who runs the desktop. Press one to play it.',
+      `Every song on Omarchy Radio, ${tracks.length} of them: the community's ` +
+      'own, sent in by somebody who runs the desktop, and the public-domain ' +
+      'Open Lo-Fi collection. Press one to play it.',
     path: '/playlist',
   }}
   schema={playlistNode(tracks)}

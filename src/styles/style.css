@@ -236,9 +236,9 @@ a, button, [role="slider"] { -webkit-tap-highlight-color: transparent; }
 /* Where the listener count used to be. Those numbers counted a stream that
    no longer exists; this says what the deck is instead. */
 /* Where the listener count used to be, and now the way to send a song: the
-   line has always claimed every one of them arrived as a pull request, so it
-   may as well be the door. Dressed like the other link in this bar rather
-   than like a link, because it is a slogan first. */
+   line is the door to the contribution path, not a claim about where every
+   song here came from. Dressed like the other link in this bar rather than
+   like a link, because it is a slogan first. */
 .tagline {
   font-size: 10px;
   letter-spacing: .24em;

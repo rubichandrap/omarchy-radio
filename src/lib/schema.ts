@@ -89,7 +89,8 @@ export function playlistNode(tracks: Item[]) {
     url: `${CANON}/playlist`,
     numTracks: tracks.length,
     description:
-      'Songs about the Omarchy desktop, every one of them made by somebody who runs it.',
+      "The community's songs about the Omarchy desktop, sent in as pull " +
+      'requests, and the public-domain Open Lo-Fi collection.',
     track: tracks.map((t, i) => {
       const node: Record<string, unknown> = {
         '@type': 'MusicRecording',
