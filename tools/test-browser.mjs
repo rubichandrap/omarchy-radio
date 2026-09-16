@@ -36,6 +36,9 @@
        a new cycle opened on a different row, and the deck it survives
      - the icons: Lucide drawings inline in the page, one size on the six
        buttons and one on the inline set, no lattice left under any of them
+     - the two strips the buttons make: the transport, then shuffle and repeat
+       8px off, sharing one row on a narrow screen, and a setting that is on
+       painted the way the play button is painted
 */
 
 import { spawn } from 'node:child_process';
@@ -765,6 +768,206 @@ async function repeatFaces() {
       return st.repeat.label === 'Repeat mode: all' ? st : null;
     });
     if (s) ok(await wears('lucide-repeat'), 'R cycles to all, and the repeat face is back');
+  } finally {
+    await tab.close();
+    await browser.close();
+  }
+}
+
+/* The six controls read as two groups, and the two that hold a setting read
+   as settings: shuffle and repeat in a strip of their own, 8px off the
+   transport's, and "on" a fill — the accent ground and the accent's own ink —
+   rather than a glyph that changed colour.
+
+   Neither is in the markup, so this reads what the browser decided: the boxes,
+   because a gap is only where two of them are, and the computed style,
+   because a fill is what came out for a button that says it is pressed. Hover
+   is driven through the pointer, the only thing that makes it true. The play
+   button was filled before any of this, so it is checked for not having
+   moved. */
+const CONTROL_PROBE = `window.__css = function (name) {
+  var d = document.createElement('div');
+  d.style.color = 'var(' + name + ')';
+  document.body.appendChild(d);
+  var v = getComputedStyle(d).color;
+  d.parentNode.removeChild(d);
+  return v;
+};
+window.__box = function (sel) {
+  var el = document.querySelector(sel);
+  if (!el) return null;
+  var r = el.getBoundingClientRect();
+  var cs = getComputedStyle(el);
+  return {
+    left: r.left, right: r.right, top: r.top, bottom: r.bottom,
+    w: r.width, h: r.height,
+    bl: parseFloat(cs.borderLeftWidth), br: parseFloat(cs.borderRightWidth),
+    bg: cs.backgroundColor, fg: cs.color, edge: cs.borderTopColor
+  };
+};`;
+
+async function controlGroups() {
+  section('the mode controls, in a strip of their own');
+  const browser = await Browser.launch('no-user-gesture-required');
+  const tab = await browser.tab();
+  try {
+    await tab.go('/playlist');
+    const booted = await until('the deck to own the playlist', async () => {
+      const st = await tab.state();
+      return st.playing && st.at > 0 ? st : null;
+    });
+    if (!booted) return;
+    await tab.eval(CONTROL_PROBE);
+
+    /* Transport first, then the two that hold a setting: read in this order,
+       the gaps between neighbours are the whole of the grouping. */
+    const BUTTONS = ['#prev', '#toggle', '#stop', '#next', '#shuffle', '#repeat'];
+    const box = (sel) => tab.eval(`window.__box(${JSON.stringify(sel)})`);
+    const row = async () => {
+      const out = {};
+      for (const sel of BUTTONS) out[sel] = await box(sel);
+      return out;
+    };
+    const vars = await tab.eval(`['--ac', '--acHi', '--acFg', '--bd']
+      .reduce(function (o, n) { o[n] = window.__css(n); return o; }, {})`);
+    // What an unfilled button's ground computes to.
+    const CLEAR = 'rgba(0, 0, 0, 0)';
+    const gap = (before, after, r) => Math.round(r[after].left - r[before].right);
+
+    let b = await row();
+    if (ok(BUTTONS.every((sel) => b[sel]), 'every button has a box')) {
+      is(gap('#prev', '#toggle', b), -1, 'the transport buttons share their borders');
+      is(gap('#toggle', '#stop', b), -1, 'stop stays with the transport');
+      is(gap('#stop', '#next', b), -1, 'and the four are one strip');
+      is(gap('#shuffle', '#repeat', b), -1, 'shuffle and repeat share a strip of their own');
+      is(gap('#next', '#shuffle', b), 8, 'which stands 8px off the transport');
+      is(b['#prev'].bl, 1, 'the transport is closed by its own border');
+      is(b['#repeat'].br, 1, 'and the mode strip by its');
+      ok(BUTTONS.every((sel) => Math.round(b[sel].top) === Math.round(b['#prev'].top)),
+         'and all six buttons sit on one row');
+      is(Math.round(b['#shuffle'].w), Math.round(b['#prev'].w),
+         'a mode control is the width of a transport button');
+    }
+
+    /* The pointer, put on a control and taken off it again. What a hovered
+       button paints is computed a frame after the move, so a check waits for
+       the paint rather than reading it in the same tick. */
+    const hover = (sel, on) => tab.send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved', button: 'none',
+      x: Math.round(on ? (b[sel].left + b[sel].right) / 2 : 4),
+      y: Math.round(on ? (b[sel].top + b[sel].bottom) / 2 : 4),
+    });
+    const settle = (sel, prop, want) => until(`${sel} to paint ${prop} ${want}`,
+      async () => {
+        const st = await box(sel);
+        return st && st[prop] === want ? st : null;
+      }, 2500);
+    /* A press leaves the pointer on the button, and a button under the
+       pointer paints its hover, so the pointer is taken off again before
+       what the press left behind is read. */
+    const press = async (sel) => { await tab.click(sel); await hover(sel, false); };
+
+    /* ── off is the plain outline, and the pointer keeps the accent border ── */
+    is(b['#shuffle'].bg, CLEAR, 'shuffle arrives as the plain outline');
+    is(b['#shuffle'].edge, vars['--bd'], "with the deck's line for a border");
+    await hover('#shuffle', true);
+    is(((await settle('#shuffle', 'edge', vars['--ac'])) || {}).edge, vars['--ac'],
+       'an outline control takes the accent border under the pointer');
+    is((await box('#shuffle')).bg, CLEAR, 'and stays unfilled while it is off');
+    await hover('#shuffle', false);
+
+    /* ── on is a fill, which is how the play button already says it ── */
+    await press('#shuffle');
+    if (await until('shuffle to come on', async () =>
+        (await tab.state()).shuffle.pressed === 'true' ? true : null)) {
+      b = await row();
+      is(b['#shuffle'].bg, vars['--ac'], 'shuffle on computes the accent ground, as play does');
+      is(b['#shuffle'].fg, vars['--acFg'], "and its icon takes the accent's own ink");
+      await hover('#shuffle', true);
+      is(((await settle('#shuffle', 'bg', vars['--acHi'])) || {}).bg, vars['--acHi'],
+         'a filled control takes the bright accent under the pointer');
+      await hover('#shuffle', false);
+      await press('#shuffle');
+      if (await until('shuffle to go off', async () =>
+          (await tab.state()).shuffle.pressed === 'false' ? true : null)) {
+        is((await box('#shuffle')).bg, CLEAR, 'and off goes back to the plain outline');
+      }
+    }
+
+    /* ── repeat lands in `all`: a mode that is on, so a button that is filled ── */
+    b = await row();
+    is(b['#repeat'].bg, vars['--ac'], 'repeat all is filled');
+    is(b['#repeat'].fg, vars['--acFg'], 'with the accent ink on its face');
+    await press('#repeat');
+    if (await until('the mode to become one', async () =>
+        (await tab.state()).repeat.label === 'Repeat mode: one' ? true : null)) {
+      is((await box('#repeat')).bg, vars['--ac'], 'repeat one is on, so it is filled too');
+      await hover('#repeat', true);
+      is(((await settle('#repeat', 'bg', vars['--acHi'])) || {}).bg, vars['--acHi'],
+         'and it takes the bright accent under the pointer, as shuffle does');
+      await hover('#repeat', false);
+    }
+    await press('#repeat');
+    if (await until('the mode to become off', async () =>
+        (await tab.state()).repeat.label === 'Repeat mode: off' ? true : null)) {
+      is((await box('#repeat')).bg, CLEAR, 'repeat off is the plain outline');
+      await hover('#repeat', true);
+      is(((await settle('#repeat', 'edge', vars['--ac'])) || {}).edge, vars['--ac'],
+         'and under the pointer it keeps the accent border, not a fill');
+      is((await box('#repeat')).bg, CLEAR, 'with nothing filled behind it');
+      await hover('#repeat', false);
+    }
+
+    /* The play button is the one that was already filled, so what is checked
+       is that the fill it has is still the fill it had — playing or paused. */
+    b = await row();
+    is(b['#toggle'].bg, vars['--ac'], 'the play button is filled while it plays');
+    is(b['#toggle'].fg, vars['--acFg'], 'in the accent ink');
+    await hover('#toggle', true);
+    is(((await settle('#toggle', 'bg', vars['--acHi'])) || {}).bg, vars['--acHi'],
+       'the play button takes the bright accent under the pointer, as it did');
+    await hover('#toggle', false);
+    await press('#toggle');
+    if (await until('the deck to pause', async () =>
+        (await tab.state()).playing === false ? true : null)) {
+      is((await box('#toggle')).bg, vars['--ac'], 'and it looks the same paused as playing');
+      is((await box('#toggle')).fg, vars['--acFg'], 'the ink is the accent ink in both of its states');
+    }
+
+    /* ── and on a narrow screen the two strips share the row ── */
+    const wide = b;
+    await tab.send('Emulation.setDeviceMetricsOverride',
+                   { width: 800, height: 900, deviceScaleFactor: 1, mobile: false });
+    const narrow = await until('the controls to lay out for a narrow screen', async () => {
+      const st = await box('#prev');
+      return st && Math.round(st.w) !== Math.round(wide['#prev'].w) ? st : null;
+    });
+    if (narrow) {
+      const n = await row();
+      ok(BUTTONS.every((sel) => Math.round(n[sel].top) === Math.round(n['#prev'].top)),
+         'the two strips stay on one row');
+      is(gap('#next', '#shuffle', n), 8, 'and keep their 8px between them');
+      const strip = await box('.tbtns');
+      ok(Math.round(n['#prev'].left) === Math.round(strip.left) &&
+         Math.round(n['#repeat'].right) === Math.round(strip.right),
+         'the buttons fill the width, both strips of them');
+
+      /* And at 900px, the edge of the rule itself, where the layout stops
+         being a narrow one. */
+      await tab.send('Emulation.setDeviceMetricsOverride',
+                     { width: 900, height: 900, deviceScaleFactor: 1, mobile: false });
+      const edge = await until('the controls to lay out at 900px', async () => {
+        const st = await box('#prev');
+        return st && Math.round(st.w) > Math.round(narrow.w) ? st : null;
+      });
+      if (edge) {
+        const e = await row();
+        ok(BUTTONS.every((sel) => Math.round(e[sel].top) === Math.round(e['#prev'].top)),
+           'and at 900px the two strips are one row still');
+        is(gap('#next', '#shuffle', e), 8, 'with the gap held at the rule\'s own edge');
+      }
+    }
+    await tab.send('Emulation.clearDeviceMetricsOverride');
   } finally {
     await tab.close();
     await browser.close();
@@ -1594,6 +1797,7 @@ try {
   await autoplayAllowed(site);
   await repeatModes(site);
   await repeatFaces();
+  await controlGroups();
   await shuffleOrder(site);
   await autoplayRefused(site);
   await find(site);

@@ -525,27 +525,43 @@ a, button, [role="slider"] { -webkit-tap-highlight-color: transparent; }
   margin-left: -1px;
 }
 .tb:first-child { margin-left: 0; }
+
+/* The one seam in the row: the mode controls are a strip of their own, 8px
+   off the transport's. It is the margin the buttons already build their
+   strips out of, at the one place it is not a shared border — which is the
+   whole of the difference between a button that moves playback and one that
+   holds a setting. */
+.tb-shuffle { margin-left: 8px; }
+
 .tb:hover { border-color: var(--ac); color: var(--ac); z-index: 1; }
 
-/* The repeat button's face says which mode it is in; the accent says the
-   cycle comes round again at all, which is why off is the one mode that sits
-   plain. The mode is on the accessible name too. It sits after the hover rule
-   so that a pressed button stays lit through a hover. */
-.tb-repeat[aria-pressed="true"] { color: var(--ac); }
-
-/* The shuffle button is one state deep, and its face carries none of it: the
-   accent says the order is a permutation, and the accessible name says which
-   way. It sits after the hover rule for the same reason. */
-.tb-shuffle[aria-pressed="true"] { color: var(--ac); }
-
-.tb-play {
-  width: 74px;
-  font-size: 13px;
+/* The repeat button's face says which of its three modes it is in, and the
+   shuffle button's accessible name says which way the order runs; the fill
+   says the same thing to the eye on both, and says it the way the play
+   button already says it — accent ground, the accent's own ink. Off is the
+   plain outline every button wears by default, so on and off cannot be
+   confused. These sit after the hover rule so that a pressed button stays
+   filled through a hover, where the fill takes the bright accent. */
+.tb-play,
+.tb-shuffle[aria-pressed="true"],
+.tb-repeat[aria-pressed="true"] {
   color: var(--acFg);
   background: var(--ac);
   border-color: var(--ac);
 }
-.tb-play:hover { background: var(--acHi); border-color: var(--acHi); color: var(--acFg); }
+
+.tb-play:hover,
+.tb-shuffle[aria-pressed="true"]:hover,
+.tb-repeat[aria-pressed="true"]:hover {
+  background: var(--acHi);
+  border-color: var(--acHi);
+  color: var(--acFg);
+}
+
+.tb-play {
+  width: 74px;
+  font-size: 13px;
+}
 
 .seek {
   flex: 1;

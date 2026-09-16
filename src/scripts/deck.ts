@@ -1730,8 +1730,9 @@ function paintTransport() {
      say the same two things. */
   el.toggle.classList.toggle('is-playing', S.playing);
   el.toggle.setAttribute('aria-label', S.playing ? 'Pause' : 'Play');
-  /* The shuffle button: one state, said twice — the accent for the eye and
-     the accessible name for everything else. */
+  /* The shuffle button: one state, said twice — the fill for the eye, which
+     the stylesheet keys off aria-pressed, and the accessible name for
+     everything else. */
   el.shuffle.setAttribute('aria-pressed', S.shuffle ? 'true' : 'false');
   el.shuffle.setAttribute('aria-label', 'Shuffle: ' + (S.shuffle ? 'on' : 'off'));
   /* The repeat button: a face per mode, so the class it wears is the mode —

@@ -566,6 +566,18 @@ The repeat button is the one control that wears a face per mode — Lucide's
 `repeat-off`, `repeat`, and `repeat-1`, one for each of its three — so the
 mode is seen rather than remembered.
 
+The six buttons read as two groups. The four that drive playback — previous,
+play/pause, stop, next — are one strip; shuffle and repeat, the two that hold a
+setting rather than make a press, are another, 8px off it, each closed by its
+own border. Below 900px the two still take one row, the gap intact, and the
+buttons fill the width.
+
+And a mode control that is on is filled the way the play button is filled:
+accent ground, the accent's own ink, the bright accent under the pointer. Off
+is the plain outline every button wears. So "on" reads the same way twice on
+the deck, and shuffle — which Lucide has no off face for — says its state with
+the fill and its accessible name rather than with a glyph.
+
 The deck draws nothing at all. The one icon it needs at runtime — the caret on
 an episode's row, because the deck builds that row — is markup the build
 rendered into the panel (`#rowCaret`) and the deck copies in, the way the build
