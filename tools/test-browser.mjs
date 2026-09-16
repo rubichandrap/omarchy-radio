@@ -1593,8 +1593,12 @@ async function offline({ songs }) {
   const tab = await browser.tab();
   try {
     await tab.go('/');
+    /* The worker's own file is named from the site's base, so a build made
+       under another base 404s it here and no registration is ever installed —
+       and `navigator.serviceWorker.ready` never settles without one, so
+       awaiting it is what used to take the whole run down with it instead of
+       failing this one check. The reload is what a second visit does. */
     const ready = await until('the service worker to take over', async () => {
-      await tab.eval('navigator.serviceWorker.ready.then(function () {})');
       return tab.eval('!!navigator.serviceWorker.controller || (location.reload(), false)');
     }, 15000, 500);
     if (!ok(ready, 'the service worker is registered and controlling the page')) return;
