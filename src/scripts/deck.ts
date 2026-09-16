@@ -1403,9 +1403,9 @@ function tuneIn() {
   S.route = r.kind;
 
   /* A list, rather than something in one — or an album, which sits at the
-     root as a list of its own: the album's songs become the list that plays,
-     so an arrival here starts it the way any arrival starts the deck, and
-     the address it was asked for stands. */
+     root as an address of its own: the album's songs become the list that
+     plays, so an arrival here starts it the way any arrival starts the deck,
+     and the address it was asked for stands. */
   if (!r.slug) {
     if (r.album) S.album = r.album;
     setTab(LISTS[r.kind].tab);
@@ -1926,7 +1926,7 @@ function paintTransport() {
      /                      the deck, playing the playlist
      /playlist              the songs
      /playlist/<song>       that song, playing
-     /<album>               one album's songs, playing
+     /<album>               one album's songs, on screen
      /podcast               the episodes
      /podcast/<episode>     that episode, playing
 

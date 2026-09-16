@@ -438,16 +438,16 @@ it permutes the
 pages the build writes stay still while what advances moves; the reasoning is
 [ADR 0001](docs/adr/0001-shuffle-permutes-play-order-not-the-list.md).
 
-The list the order is drawn over is the album in view when one is chosen, and
-the whole playlist otherwise — an album is a scope, not a list of its own
-([ADR 0003](docs/adr/0003-an-album-narrows-the-songs-list.md)), so picking one
-changes what advances, what the rows number and what the readout names, and
-nothing else. Picking it is a command as well as a place: an item outside the
-new album is replaced there and then — its first track, or the head of a drawn
-cycle while shuffled — an item inside it is left playing with the order drawn
-around it, and a deck that is paused or stopped starts nothing. The readout
-names the album the playing song came out of, which is how the panel answers
-*what am I hearing* even while the episodes are the list on screen.
+The list the order is drawn over is the list a play seated the deck in: the
+album whose row was pressed, or the whole playlist — an album is a scope, not
+a list of its own
+([ADR 0003](docs/adr/0003-an-album-narrows-the-songs-list.md)). A pick is a
+look — an album link, `all` or home moves the rows, the address, the numbering
+and the note, and nothing about the sound — and what plays goes on being
+walked by the list its playback was seated into. Arriving at an album's
+address starts that album, the way the front page starts the playlist. The
+readout names the album the playing song came out of, which is how the panel
+answers *what am I hearing* even while the episodes are the list on screen.
 
 A cycle is one pass through the order: every item once. Stepping off the end
 draws a new permutation and stands the deck at its head — never the item that

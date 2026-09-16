@@ -7,11 +7,12 @@
  * title naming it, the note counting its songs, and the selector over them
  * marking the album in view.
  *
- * The page is the place; the command is the deck's. The album in view is the
- * list that plays, so arriving here starts this album the way arriving at
- * the deck starts the playlist, and picking any album — this one or another
- * — repaints, replaces what is playing when what is playing is outside it,
- * and leaves it alone when it is not. That side of it is src/scripts/deck.ts.
+ * The page is a place; what plays is the deck's. Arriving here starts this
+ * album the way arriving at the deck starts the playlist, and picking any
+ * album — this one or another — moves the look and not the sound: what plays
+ * goes on playing, walked by the list its playback was seated into. A row
+ * pressed in the album on screen is what seats the deck in it; that side of
+ * it is src/scripts/deck.ts.
  *
  * readTracks() is what refuses a slug the site root already owns — an album
  * named "playlist" would take /playlist — so the build stops before it writes
