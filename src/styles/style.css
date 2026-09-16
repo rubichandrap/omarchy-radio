@@ -1136,10 +1136,12 @@ a, button, [role="slider"] { -webkit-tap-highlight-color: transparent; }
   /* No slash key to press, and nothing to clear until something is typed. */
   .find-k { display: none; min-height: 44px; padding: 0 12px; }
   .find.has-q .find-k { display: inline-flex; align-items: center; }
-  /* A row of its own here, the width of the panel, with the albums sharing
-     it: a fingertip on each of them, whatever the index holds. */
-  .albs { margin: 0 16px 12px; align-self: stretch; }
-  .albs .seg-b { flex: 1; justify-content: center; }
+  /* A row of its own here, and it keeps the thin box the desktop draws: it
+     narrows the songs, the switch chooses the list, and the size says which
+     is which before a press does. The links size to their words rather than
+     sharing the panel's width. */
+  .albs { margin: 0 16px 12px; }
+  .albs .seg-b { min-height: 0; }
 
   .bar { gap: 14px; }
   /* The tagline crowds the wordmark at this width, and it is a slogan. It is

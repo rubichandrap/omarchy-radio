@@ -651,8 +651,14 @@ async function albumsAtTheirAddresses({ songs, albums }) {
         var links = Array.prototype.map.call(document.querySelectorAll('#albs a.seg-b'), shot);
         var swap = document.getElementById('tabSongs');
         var row = document.getElementById('albs');
-        return links.length && swap && row
-          ? { album: links, swap: shot(swap), row: row.clientWidth }
+        var panel = document.querySelector('.playlist');
+        var box = function (el) {
+          var r = el.getBoundingClientRect();
+          return { l: r.left, w: r.width };
+        };
+        return links.length && swap && row && panel
+          ? { album: links, swap: shot(swap), row: row.clientWidth,
+              rowBox: box(row), panelBox: box(panel) }
           : null;
       })()`);
       await tab.send('Emulation.clearDeviceMetricsOverride');
@@ -674,19 +680,28 @@ async function albumsAtTheirAddresses({ songs, albums }) {
          `(${wide.album.map((l) => l.h).join('/')} against ${wide.swap.h})`);
     }
 
-    /* The narrow layout is untouched: at the rule's own last pixel and below
-       it, one row, the width of the panel, every album a fingertip. */
+    /* The narrow layout carries the same distinction: the album links keep
+       the thin box the desktop draws — sized to their words, starting at the
+       panel's left edge — while the switch's links keep the 44px target. The
+       two rows never read as twins. */
     for (const width of [900, 800]) {
       const slim = await drawn(width);
       if (!ok(slim, `the album row is drawn at ${width}px too`)) continue;
-      ok(slim.album.every((l) => l.h === 44), `at ${width}px every album link is still a 44px target`);
-      /* The links grow from nothing, so what they share comes out equal up to
-         the one border the shared edges are drawn with. */
-      const even = slim.album.every((l) => Math.abs(l.w - slim.album[0].w) <= 1.1);
-      const spans = Math.abs(slim.album.reduce((n, l) => n + l.w, 0) - slim.row) < 1;
-      ok(even && spans,
-         `and the row is one full width, the albums sharing it evenly ` +
-         `(${slim.album.map((l) => l.w).join('/')} in ${slim.row})`);
+      ok(slim.album.every((l) => l.h < slim.swap.h),
+         `at ${width}px every album link stands shorter than the switch ` +
+         `(${slim.album.map((l) => l.h).join('/')} against ${slim.swap.h})`);
+      ok(slim.album.every((l) => l.pad === '3px 8px 3px 8px' && l.fs === slim.swap.fs),
+         `on the thinner box and the switch’s own type ` +
+         `(${slim.album.map((l) => l.pad).join(' / ')})`);
+      /* Sized to their words, the links stop sharing the row evenly: `all`
+         is a word, an album's name is longer. */
+      const widths = slim.album.map((l) => l.w);
+      ok(Math.max(...widths) - Math.min(...widths) > 20,
+         `whose links size to their words, no longer an even share (${widths.join('/')})`);
+      ok(Math.abs(slim.rowBox.l - (slim.panelBox.l + 16)) <= 1,
+         `and the row starts at the panel's left edge ` +
+         `(${Math.round(slim.rowBox.l)} against ${Math.round(slim.panelBox.l + 16)})`);
+      ok(slim.swap.h === 44, 'while the switch keeps its 44px target');
     }
 
     // Picking an album is a press on a link: a place, and no reload.
