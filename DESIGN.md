@@ -414,9 +414,12 @@ and does three things worth writing down:
 - **Folded on both sides** — `src/lib/slug.ts` grew a `fold()` beside
   `slugify()`, for the same reason and with the spaces kept. Nobody hunting
   for Aurélien's song is going to reach for the acute.
-- **The number is the item's place in the list**, not its place among the
-  matches. The whole list is walked and non-matches are skipped, which is the
-  same shape `rowsFor()` uses to number one row on a permalink page 02.
+- **The number is the song's place in its album**, not its place among the
+  matches: the albums arrive one after another, so the count starts again at
+  each one's first song, and a row wears the same number on the album's page,
+  in the whole playlist and on its own page. The whole list is walked and
+  non-matches are skipped, which is the same shape `rowsFor()` uses to number
+  one row on a permalink page 02.
 
 And it stays out of the address. Every other thing the deck does to what is on
 screen is written into the path, because those are places somebody can be

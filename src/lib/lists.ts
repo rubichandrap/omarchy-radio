@@ -78,6 +78,7 @@ export function parseTracks(data: Manifest, album: string): TrackEntry[] {
  */
 export function parseAlbums(index: AlbumIndex, dirs: AlbumDir[]): Item[] {
   const albums = index.albums ?? [];
+  checkAlbumSlugs(albums);
   const flat: TrackEntry[] = [];
 
   for (const album of albums) {
@@ -261,3 +262,55 @@ export function isReservedSlug(key: string): boolean {
 }
 
 const KINDS: Kind[] = ['playlist', 'podcast'];
+
+/* What already answers at the site root, and what an album's slug may not be.
+ *
+ * An album lives at its own address at the root, beside the two lists, so a
+ * slug that is already a page there would take a page that belongs to
+ * something else: an album called `playlist` would answer /playlist with the
+ * community's album, and one called `index` would be written over the front
+ * page. `all` is the one word in this list that is not an address at all —
+ * it is what the selector offers for every song, and an album by that name
+ * would be a second `all` in the same row of links.
+ *
+ * The check runs inside parseAlbums(), so both the build and the route test
+ * refuse the same slugs, and the message says which one it is. */
+const ROOT_OWNS: Record<string, string> = {
+  playlist: 'the list of every song answers there',
+  podcast: 'the list of episodes answers there',
+  all: 'the selector offers it for every song',
+  index: 'the front page is written there',
+  '404': 'the page for everything that is not there is written there',
+  assets: 'the fonts and the images the pages are drawn with are served from there',
+  stories: 'the mirrored feed is served from there',
+  tracks: 'the songs themselves are served from there',
+  _astro: 'the built deck and its stylesheet are served from there',
+  'sitemap.xml': 'the addresses for the crawlers are listed there',
+  'robots.txt': 'what the crawlers are told is served there',
+  'sw.js': 'the service worker is served there',
+  'site.webmanifest': 'what the site tells a browser it is is served there',
+  'favicon.ico': 'the icon in the tab is served there',
+};
+
+export function checkAlbumSlugs(albums: Album[]): void {
+  for (const album of albums) {
+    /* The slug is the address, and the address is a path the build writes a
+       page at: anything but the shape an address is (lower case, words joined
+       by hyphens) is a file somewhere nobody asked for. */
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(album.slug)) {
+      throw new Error(
+        `public/tracks/albums.json declares the album "${album.slug}", which is not ` +
+        'the shape an address is: lower case, words joined by hyphens, nothing but ' +
+        'a-z, 0-9 and -. The slug is where the album answers, so it has to be one.',
+      );
+    }
+    const clash = ROOT_OWNS[album.slug];
+    if (!clash) continue;
+    throw new Error(
+      `public/tracks/albums.json declares the album "${album.slug}", but /${album.slug} ` +
+      `at the site root is not the album's to take: ${clash}. An album answers at its ` +
+      'own address there, so its slug has to be a word nothing else at the root is ' +
+      'named by. Rename the album, or take its page out of the root.',
+    );
+  }
+}

@@ -34,6 +34,9 @@
        mode's own face after a reload
      - the shuffle order: a permutation of the list walked one row at a time,
        a new cycle opened on a different row, and the deck it survives
+     - an album is a place: every album answers at its own address at the site
+       root with its rows, its title and its note, the selector over the songs
+       marks the album the address names, and the numbers count within it
      - the icons: Lucide drawings inline in the page, one size on the six
        buttons and one on the inline set, no lattice left under any of them
      - the two strips the buttons make: the transport, then shuffle and repeat
@@ -185,6 +188,24 @@ window.__state = function () {
       function (li) { return li.dataset.skin; }),
     tab: (document.querySelector('.seg-b.is-on') || {}).id || '',
     note: (document.getElementById('playlistNote') || {}).textContent || '',
+    /* What the panel says it is showing, and the number the lit row wears. */
+    panel: (document.getElementById('playlistName') || {}).textContent || '',
+    rowNum: on ? ((on.querySelector('.tr-n') || {}).textContent || '') : '',
+    /* The album selector: whether it is over the list on screen at all, what
+       it offers, and which of those it marks as the page being read. */
+    albums: (function () {
+      var box = document.getElementById('albs');
+      if (!box) return null;
+      var links = function (sel) {
+        return Array.prototype.map.call(box.querySelectorAll(sel),
+          function (a) { return a.textContent; });
+      };
+      return {
+        hidden: !!box.hidden,
+        labels: links('a'),
+        current: links('a[aria-current="page"]')
+      };
+    })(),
     repeat: (function () {
       var b = document.getElementById('repeat');
       return {
@@ -388,9 +409,18 @@ async function routes() {
     if (!m) throw new Error(`${path} has no item baked into it`);
     items.push({ path, ...JSON.parse(m[1].replace(/\\u003c/g, '<')) });
   }
+  /* The albums, and the address each answers at. The addresses come out of
+     the sitemap rather than being spelled here, so a suite run under another
+     base asks for the pages that base serves. */
+  const index = JSON.parse(await (await fetch(`${BASE}/tracks/albums.json`)).text());
+  const albums = (index.albums ?? []).map((a) => {
+    const m = sitemap.match(new RegExp(`<loc>([^<]*/${a.slug})</loc>`));
+    return { slug: a.slug, name: a.name, path: m ? new URL(m[1]).pathname : `/${a.slug}` };
+  });
   return {
     songs: items.filter((i) => i.kind === 'playlist'),
     eps: items.filter((i) => i.kind === 'podcast'),
+    albums,
   };
 }
 
@@ -427,10 +457,11 @@ async function find({ songs }) {
     let s = await type('koontz fix');
     is(s.rows, 1, 'both words have to appear, across the title and the artist');
     ok(/Fix Everything/.test(s.titles[0] || ''), `and it is the right song (${s.titles[0]})`);
-    // The number is the song's place in the playlist, not its place here.
-    const at = all.titles.indexOf(s.titles[0]);
+    // The number is the song's place in its album, not its place here.
+    const found = songs.find((q) => q.title === s.titles[0]);
+    const at = songs.filter((q) => q.album === found.album).findIndex((q) => q.title === found.title);
     is(s.nums[0], String(at + 1).padStart(2, '0'),
-       'a filtered row keeps the number it has in the playlist');
+       'a filtered row keeps the number it has in its album');
     ok(/\b1 of \d+ tracks\b/.test(s.note), `the note counts the matches (${s.note})`);
     is(s.hint, 'esc', 'and the key hint says how to get out of it');
 
@@ -457,6 +488,160 @@ async function find({ songs }) {
       return st.tab === 'tabPodcast' ? st : null;
     });
     if (s) is(s.query, '', 'switching lists clears the query rather than filtering the other one');
+  } finally {
+    await tab.close();
+    await browser.close();
+  }
+}
+
+/* An album is a place.
+ *
+ * Every declared album answers at an address of its own at the site root,
+ * beside the two lists, and the page that answers is the album's: its rows,
+ * the panel title naming it, a note counting it, and the selector over the
+ * songs marking the album the address names. The numbers count within the
+ * album on screen — a row's number is the song's place in its album — so a
+ * song's own page wears the number the deck gave it, not the one it happens
+ * to have in the whole playlist.
+ *
+ * What plays is deliberately not this section's business: picking an album
+ * changes what is on screen, the address and the numbering, and the playlist
+ * goes on playing. */
+async function albumsAtTheirAddresses({ songs, albums }) {
+  section('an album is a place');
+  const browser = await Browser.launch('no-user-gesture-required');
+  const tab = await browser.tab();
+  try {
+    const album = albums[albums.length - 1];
+    if (!ok(album, 'the index declares an album to be sent to')) return;
+    const mine = songs.filter((s) => s.album === album.slug);
+    if (!ok(mine.length, `the ${album.slug} album has songs in the playlist`)) return;
+    const pad = (n) => String(n).padStart(2, '0');
+
+    const type = async (q) => {
+      await tab.eval(`(function () {
+        var b = document.getElementById('find');
+        b.value = ${JSON.stringify(q)};
+        b.dispatchEvent(new Event('input', { bubbles: true }));
+      })()`);
+      return tab.state();
+    };
+
+    /* The front page is the whole playlist, and the selector is over it: all
+       of them, in the order the index declares them, with `all` the one being
+       read — the address names no album. */
+    await tab.go('/');
+    let s = await until('the deck to own the playlist', async () => {
+      const st = await tab.state();
+      return st.playing && st.rows >= songs.length ? st : null;
+    });
+    if (!s) return;
+    if (!ok(s.albums, 'the panel carries the album selector')) return;
+
+    is(s.albums.hidden, false, 'the selector is over the songs');
+    is(s.albums.labels.join(','),
+       ['all'].concat(albums.map((a) => a.name.toLowerCase())).join(','),
+       'it lists all and every album, in the order the index declares them');
+    is(s.albums.current.join(','), 'all', 'and on the unscoped list the one it marks is all');
+
+    // Picking an album is a press on a link: a place, and no reload.
+    await tab.click(`#albs a[data-album="${album.slug}"]`);
+    s = await until('the album to answer', async () => {
+      const st = await tab.state();
+      return st.path === album.path && st.rows === mine.length ? st : null;
+    });
+    if (!s) return;
+    is(s.sentinel, 1, 'the album link is the deck’s, not a fresh document');
+    is(s.path, album.path, 'the album answers at its own address');
+    is(s.panel, album.name.toLowerCase(), 'the panel title names the album');
+    ok(new RegExp(`^${mine.length} tracks`).test(s.note.trim()),
+       `the note counts the album's songs (${s.note.trim()})`);
+    is(s.albums.current.join(','), album.name.toLowerCase(),
+       'and the selector marks the album the address names');
+    is(s.nums[0], '01', 'the rows count within the album: the first one is 01');
+    is(s.nums[s.nums.length - 1], pad(mine.length), 'and the last one is its last track');
+
+    // Find filters the album on screen, and counts what it looked through.
+    const foreign = songs.filter((q) => q.album !== album.slug && q.artist)
+      .sort((a, b) => b.artist.length - a.artist.length)[0];
+    if (foreign) {
+      s = await type(foreign.artist);
+      is(s.rows, 0, `a song from ${foreign.album} is not in the album on screen`);
+      ok(s.note.includes(String(mine.length)) && /nothing matched/.test(s.note),
+         `and the note counts the album it looked through (${s.note.trim()})`);
+    }
+    const some = mine[mine.length - 1];
+    s = await type(some.title);
+    if (is(s.rows, 1, "the album's own song is found in it")) {
+      is(s.nums[0], pad(mine.length), 'keeping the number it has in the album');
+    }
+    await type('');
+
+    /* A press on a row inside the album plays the song that row names, not
+       the one sitting at that index in the whole playlist, and the address it
+       writes is that song's own — a song keeps /playlist/<song> wherever in
+       the playlist it sits. */
+    const third = mine[2];
+    await tab.click(`#tracks a.track[href="${third.path}"]`);
+    s = await until('the pressed row to play', async () => {
+      const st = await tab.state();
+      return st.path === third.path && st.rowHref === third.path ? st : null;
+    });
+    if (!s) return;
+    is(s.row, third.title, "the album's third row plays the third song of the album");
+    is(s.albums.current.join(','), 'all',
+       'and the address it wrote names a song and no album, so all is the one marked');
+
+    /* Which is one step, and back takes it. */
+    await tab.eval('history.back()');
+    s = await until('the way back to the album', async () => {
+      const st = await tab.state();
+      return st.path === album.path && st.rows === mine.length ? st : null;
+    });
+    if (s) is(s.albums.current.join(','), album.name.toLowerCase(), 'and the album is marked again');
+
+    /* A song's own page — the document itself, not the press — is numbered by
+       its place in its album, and the list behind it is the whole playlist,
+       because its address names an album and no song. */
+    await tab.go(third.path);
+    s = await until('the song to play, out of the whole playlist', async () => {
+      const st = await tab.state();
+      return st.playing && st.rowHref === third.path && st.rows >= songs.length ? st : null;
+    });
+    if (!s) return;
+    is(s.path, third.path, 'a song keeps the /playlist address it always had');
+    is(s.rowNum, pad(3), "and its own page is numbered by its place in its album");
+
+    /* Picking an album now, with a song the listener named still playing: the
+       address becomes the album's and the deck stops calling the page the
+       song's, so the address and the selector go on agreeing. */
+    await tab.click(`#albs a[data-album="${album.slug}"]`);
+    s = await until('the album to take the address back', async () => {
+      const st = await tab.state();
+      return st.path === album.path ? st : null;
+    });
+    if (!s) return;
+    is(s.path, album.path, 'the album takes the address even after a song was named');
+    is(s.canonical, 'https://radio.omarchy.org' + album.path, 'and the canonical says the same');
+    is(s.albums.current.join(','), album.name.toLowerCase(),
+       'with the album marked: the panel and the address agree');
+
+    // Every album, by address: the marking is the address's, not one page's.
+    const other = albums[0];
+    await tab.go(other.path);
+    s = await until('the other album', async () => {
+      const st = await tab.state();
+      return st.path === other.path && st.rows ? st : null;
+    });
+    if (s) is(s.albums.current.join(','), other.name.toLowerCase(), 'another album marks itself');
+
+    // And over the episodes the selector is not there at all.
+    await tab.go('/podcast');
+    s = await until('the episodes', async () => {
+      const st = await tab.state();
+      return st.tab === 'tabPodcast' ? st : null;
+    });
+    if (s) is(s.albums.hidden, true, 'and the selector is not over the episodes');
   } finally {
     await tab.close();
     await browser.close();
@@ -1903,6 +2088,7 @@ try {
   await shuffleOrder(site);
   await autoplayRefused(site);
   await find(site);
+  await albumsAtTheirAddresses(site);
   await reveal(site);
   await artistless(site);
   await stalePlaylist(site);

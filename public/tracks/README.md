@@ -54,6 +54,12 @@ to each other: a directory holding songs or a list that no line declares, a
 line with no `playlist.json` behind it, or a line with no directory at all,
 each is refused rather than playing nothing.
 
+The slug is also where the album answers: `radio.omarchy.org/<slug>`, beside
+`/playlist`, with the album's rows and its own selector link. So it is lower
+case, words joined by hyphens, and it cannot be a word the site root already
+owns — `playlist`, `podcast`, `tracks`, `index` and the rest; the build
+refuses either and names what it clashed with.
+
 ## Fields
 
 | field | required | notes |

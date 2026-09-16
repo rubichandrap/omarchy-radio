@@ -18,7 +18,7 @@ import index from '../../public/tracks/albums.json' with { type: 'json' };
 import feedXml from '../../public/stories/feed.rss?raw';
 import {
   parseAlbums, parseEpisodes,
-  type AlbumDir, type Manifest,
+  type Album, type AlbumDir, type Manifest,
 } from './lists.ts';
 import type { Item, Show } from './item.ts';
 
@@ -46,6 +46,12 @@ function albumDirs(): AlbumDir[] {
     the index lists them, each album's songs in their own order. */
 export function readTracks(): Item[] {
   return parseAlbums(index, albumDirs());
+}
+
+/** The albums, in the order the index declares them: what the deck offers to
+    play one at a time, and where each of them answers. */
+export function readAlbums(): Album[] {
+  return index.albums ?? [];
 }
 
 /** The show, and every episode it has published, newest first. */

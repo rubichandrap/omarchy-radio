@@ -20,7 +20,9 @@ _Avoid_: queue, feed
 **Album**:
 A named group of songs inside the playlist — the community's own, or a
 collection from elsewhere. A song belongs to exactly one album, and playing an
-album plays all of it.
+album plays all of it. An album answers at an address of its own at the site
+root, beside the two lists; a song keeps its `/playlist/<song>` address
+wherever it is in the playlist.
 _Avoid_: collection, category, folder, library
 
 **Playlist**:

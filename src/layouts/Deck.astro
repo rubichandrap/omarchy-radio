@@ -1,11 +1,18 @@
 ---
 /* The deck. Every page on this site is this file.
  *
- * Thirty-eight addresses, one layout: what a page differs by is the head, the
+ * One layout behind every address: what a page differs by is the head, the
  * item baked into it, and which list the panel is showing with which row
  * picked out. Those are the props.
+ *
+ * The albums are the one fact every page carries in full, because the deck
+ * needs their words before anything is fetched: an album answers at its own
+ * address at the root, and a page that cannot tell /lofi from a stranger's
+ * path would fetch a document instead of routing. So the index is baked in
+ * beside the item, the same trade, and the deck replaces it a moment later.
  */
 import { BASE, CANON } from '../lib/site.ts';
+import { readAlbums } from '../lib/sources.ts';
 import { headMeta, type Head } from '../lib/seo.ts';
 import { siteGraph } from '../lib/schema.ts';
 import Bar from '../components/Bar.astro';
@@ -32,16 +39,23 @@ interface Props {
   list: Item[];
   /** The one this page is for, if it is for one. */
   only?: Item | null;
+  /** The album this page answers for, if it answers for one: the address. */
+  album?: string;
   show: Show;
 }
 
-const { head, schema, seed = null, kind, list, only = null, show } = Astro.props;
+const { head, schema, seed = null, kind, list, only = null, album = '', show } = Astro.props;
+
+/* Every album, in the order the index declares them: what the selector offers
+   and the deck's router has to know by name. */
+const albums = readAlbums();
 
 /* The escape is what keeps a title with a bracket in it from ending the
    script early. */
 const safeJson = (value: unknown) =>
   JSON.stringify(value, null, 2).replace(/</g, '\\u003c');
 const seedJson = seed ? JSON.stringify(seed).replace(/</g, '\\u003c') : '';
+const albumsJson = JSON.stringify(albums).replace(/</g, '\\u003c');
 ---
 <!DOCTYPE html>
 <html lang="en">
@@ -109,6 +123,10 @@ const seedJson = seed ? JSON.stringify(seed).replace(/</g, '\\u003c') : '';
   <script is:inline set:html={`window.__ITEM__ = ${seedJson};`} />
 )}
 
+{/* The albums, the same way and for the same reason: the router has to know
+    an album's address before the index arrives. */}
+<script is:inline set:html={`window.__ALBUMS__ = ${albumsJson};`} />
+
 <script type="application/ld+json" is:inline set:html={safeJson(siteGraph(show.home))} />
 {schema && <script type="application/ld+json" is:inline set:html={safeJson(schema)} />}
 </head>
@@ -130,7 +148,7 @@ const seedJson = seed ? JSON.stringify(seed).replace(/</g, '\\u003c') : '';
     </div>
 
     <div class="row-bot">
-      <Panel kind={kind} list={list} only={only} show={show} />
+      <Panel kind={kind} list={list} only={only} albums={albums} album={album} show={show} />
     </div>
 
     <Foot />
