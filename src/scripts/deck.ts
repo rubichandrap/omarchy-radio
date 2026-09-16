@@ -501,9 +501,11 @@ function wireInstall() {
    working buttons, and the keyboard media keys reach the deck. Without
    it a backgrounded stream is audible but unreachable. */
 
+/* The lock screen's picture of what is playing. Named from the base: the
+   page it is read from is a song's own address, one directory down. */
 var MEDIA_ART = [
-  { src: 'assets/images/icon-192.png', sizes: '192x192', type: 'image/png' },
-  { src: 'assets/images/icon-512.png', sizes: '512x512', type: 'image/png' }
+  { src: BASE + '/assets/images/icon-192.png', sizes: '192x192', type: 'image/png' },
+  { src: BASE + '/assets/images/icon-512.png', sizes: '512x512', type: 'image/png' }
 ];
 
 function mediaSupported() {
@@ -2772,9 +2774,13 @@ function boot() {
     if (vw instanceof HTMLElement) vw.hidden = true;
   }
 
-  if ('serviceWorker' in navigator) {
-    // Nothing here depends on it, so a failure is not worth reporting.
-    navigator.serviceWorker.register('/sw.js').catch(function () { /* fine without */ });
+  /* Only where it belongs: a service worker in dev caches the dev server's
+     answers, and a page then shows what it was told to memorise rather than
+     what the file says. */
+  if ('serviceWorker' in navigator && import.meta.env.PROD) {
+    // Nothing here depends on it, so a failure is not worth reporting. The
+    // file is named from the site's base like every other one.
+    navigator.serviceWorker.register(BASE + '/sw.js').catch(function () { /* fine without */ });
   }
 }
 

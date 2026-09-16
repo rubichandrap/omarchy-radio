@@ -12,6 +12,8 @@ import { defineConfig } from 'astro/config';
  *
  * The copy is the whole of it: the two files are the same page, so writing the
  * second from the first is the only way they cannot drift.
+ *
+ * @returns {import('astro').AstroIntegration}
  */
 function listDirectoryIndexes() {
   return {

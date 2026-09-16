@@ -33,6 +33,7 @@ var ASSETS = [
      carry a stamp of their contents — /_astro/<name>.<hash>.js, written by
      the bundler, so a page cached before a deploy can never be served a deck
      it no longer fits. */
+  BASE + '/assets/fonts/fonts.css',
   BASE + '/assets/fonts/jetbrains-mono-latin.woff2',
   BASE + '/assets/fonts/space-grotesk-latin.woff2',
   BASE + '/assets/fonts/vt323-latin.woff2',
