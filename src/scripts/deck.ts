@@ -1926,7 +1926,7 @@ function paintTransport() {
      /                      the deck, playing the playlist
      /playlist              the songs
      /playlist/<song>       that song, playing
-     /<album>               one album's songs, playing
+     /<album>               one album's songs, on screen
      /podcast               the episodes
      /podcast/<episode>     that episode, playing
 
