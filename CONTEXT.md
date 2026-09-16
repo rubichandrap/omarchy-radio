@@ -12,13 +12,20 @@ element it drives.
 _Avoid_: player, app, site
 
 **List**:
-One of the two collections the deck can play: the playlist, or the episodes.
-Exactly one of them is playing; the other may still be on screen.
+One of the two things the deck can play: the playlist, or the episodes.
+Exactly one of them is playing; the other may still be on screen. The playlist
+can be narrowed to one album without becoming a list of its own.
 _Avoid_: queue, feed
 
+**Album**:
+A named group of songs inside the playlist — the community's own, or a
+collection from elsewhere. A song belongs to exactly one album, and playing an
+album plays all of it.
+_Avoid_: collection, category, folder, library
+
 **Playlist**:
-The songs list, taken from the upstream station and the community track
-library. The show's episodes are not a playlist.
+Every song the deck can play, across every album. The show's episodes are not
+a playlist.
 _Avoid_: station, queue
 
 **Episode**:
@@ -29,8 +36,9 @@ _Avoid_: podcast (the show is the podcast; an episode is one part of it)
 
 **Play order**:
 The sequence the deck walks when it advances by itself: the list's own order
-when shuffle is off, a permutation of the list when shuffle is on. It is not
-what is on screen, and not what a shared link names.
+when shuffle is off, a permutation of the list when shuffle is on. The list is
+whatever is playing — one album, or the whole playlist. It is not what is on
+screen, and not what a shared link names.
 _Avoid_: queue (a queue is the listener's own picks, a feature of its own)
 
 **Shuffle**:
