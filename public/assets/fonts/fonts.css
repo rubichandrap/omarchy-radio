@@ -4,7 +4,8 @@
    filenames, the one spelling that resolves in dev and in the build alike.
    The sheet is linked from the page rather than bundled for the same reason:
    the bundler would move it to /_astro/, where those names point at nothing,
-   and it needs no stamp of its own to sit beside files that never move. */@font-face {
+   and it needs no stamp of its own to sit beside files that never move. */
+@font-face {
   font-family: "JetBrains Mono";
   font-style: normal;
   font-weight: 400;
