@@ -738,6 +738,35 @@ async function albumsPlay({ songs, albums }) {
     is(s.path, first.path, 'next is the deck walking, not the address moving');
     is(s.rows, other.length, 'and the rows on screen are still the other album’s');
 
+    /* Home is a look like the rest: the whole playlist on screen, the album
+       still the list that plays. */
+    const walking = s;
+    await tab.click('a.mark');
+    s = await until('the front of the deck', async () => {
+      const st = await tab.state();
+      return st.path === '/' && st.rows === songs.length ? st : null;
+    });
+    if (!s) return;
+    is(s.src, walking.src, 'pressing home leaves the sound alone');
+    is(playingNow(s).album, last.slug, 'and the album it was playing goes on playing');
+    const on = playingNow(s);
+    const nextMine = mine[(mine.indexOf(on) + 1) % mine.length];
+    await tab.click('#next');
+    s = await until('the album to walk on', async () => {
+      const st = await tab.state();
+      const p = playingNow(st);
+      return p && p.path === nextMine.path ? st : null;
+    });
+    if (!s) return;
+    is(s.path, '/', "and next keeps walking the album, off the page it is read on");
+
+    // Back to the album for the checks that need it on screen.
+    await tab.click(`#albs a[data-album="${first.slug}"]`);
+    if (!await until('the album again', async () => {
+      const st = await tab.state();
+      return st.path === first.path && st.rows === other.length ? st : null;
+    })) return;
+
     // ── a row pressed in the album on screen seats it ──
     await tab.click(`#tracks a.track[href="${other[0].path}"]`);
     s = await until("the album's first row to play", async () => {
@@ -1020,6 +1049,10 @@ async function albumsPlay({ songs, albums }) {
     is(q.muted, true, 'the arrival was refused the sound, so the deck plays muted');
     const muted = q;
     const song = playingNow(muted);
+    /* What makes the no-row-lit check below meaningful is the album on screen
+       being another one: the front page starts in the album declared first. */
+    if (!ok(song && song.album === first.slug,
+            'the front page starts in the album the index declares first')) return;
 
     /* An album that is not the playing song's: the press is a look, and it
        is the gesture the arrival could not be. */
