@@ -71,6 +71,6 @@ interface Props {
 }
 
 const { name } = Astro.props;
-const [Draw, size] = ICONS[name as keyof typeof ICONS];
+const [Draw, size] = ICONS[name];
 ---
 <Draw size={size} class={`i i-${name}`} />
