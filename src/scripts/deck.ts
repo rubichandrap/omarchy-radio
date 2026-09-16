@@ -795,26 +795,27 @@ function wireGraph() {
    the list it was drawn from by reference: a fresh array every call would
    make every paint look stale and draw the order again. */
 
-/** One album's songs, held: the album it was filtered for, and the flat list
-    it came out of, so a reload of the manifest is known to have replaced it. */
-interface Scoped { album: string; tracks: Item[]; list: Item[] }
+/** One album's songs, held: the album they were filtered for, the flat list
+    they came out of, and the songs themselves. A reload of the manifest
+    arrives as a new flat list, which is how the held songs are known stale. */
+interface Scoped { album: string; from: Item[]; list: Item[] }
 
 function albumScope(album: string, held: Scoped): Item[] {
   if (!album) return S.tracks;
-  if (held.album !== album || held.tracks !== S.tracks) {
+  if (held.album !== album || held.from !== S.tracks) {
     held.list = S.tracks.filter(function (t) { return t.album === album; });
     held.album = album;
-    held.tracks = S.tracks;
+    held.from = S.tracks;
   }
   return held.list;
 }
 
 /** The album the panel shows, and the whole playlist while none is up. */
-var viewHeld: Scoped = { album: '', tracks: [], list: [] };
+var viewHeld: Scoped = { album: '', from: [], list: [] };
 function songScope(): Item[] { return albumScope(S.album, viewHeld); }
 
 /** The album the deck walks, and the whole playlist while none is seated. */
-var walkHeld: Scoped = { album: '', tracks: [], list: [] };
+var walkHeld: Scoped = { album: '', from: [], list: [] };
 function playingScope(): Item[] { return albumScope(S.playingAlbum, walkHeld); }
 
 // The list the mode names: the episodes while a story plays, and the songs —
