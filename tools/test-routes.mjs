@@ -26,6 +26,10 @@
  *   4. A link in a page points at an address that is not served. Every
  *      internal href in every generated page is followed.
  *
+ *   5. The album index and the album directories disagree. The build refuses
+ *      either direction through parseAlbums(); this reads the same files off
+ *      disk and holds the same rule up beside it.
+ *
  * It serves dist/, so it tests what would be deployed. No dependencies.
  */
 
@@ -39,10 +43,10 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { assignSlugs, fold, slugify } from '../src/lib/slug.ts';
 import { SKINS, derive } from '../src/scripts/theme.ts';
-/* The parsing, not the reading: the build imports the manifest and the feed
-   through Vite, which plain node knows nothing about. This is the same code
-   over the same two files. */
-import { parseEpisodes, parseTracks } from '../src/lib/lists.ts';
+/* The parsing, not the reading: the build finds the album lists through the
+   bundler and the feed through a `?raw` import, which plain node knows
+   nothing about. This is the same code over the same files. */
+import { parseAlbums, parseEpisodes } from '../src/lib/lists.ts';
 import { BASE as SITE_BASE, CANON } from '../src/lib/site.ts';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -332,6 +336,32 @@ function slugRule() {
   console.log(`  ${ADVERSARIAL.length} awkward titles, all spelled as expected`);
 }
 
+/* The album index and the directories are two facts that have to agree, and
+   both disagreements are silent: an album declared with no list is a
+   collection that plays nothing, and a directory holding a list nobody
+   declared is one that never plays at all. The build refuses both — this is
+   parseAlbums(), the same function, run over the pair on disk and then over a
+   pair that disagrees each way, because a rule that has never bitten is not a
+   rule. The lists are paired with the directory each was read out of, which
+   is what makes the two facts comparable at all. */
+function albumRule(index, lists) {
+  const declared = index.albums ?? [];
+  for (const album of declared) {
+    ok(lists.some((l) => l.slug === album.slug),
+       `public/tracks/albums.json declares "${album.slug}", but public/tracks/${album.slug}/playlist.json is not there`);
+  }
+  for (const { slug } of lists) {
+    ok(declared.some((a) => a.slug === slug),
+       `public/tracks/${slug}/playlist.json is not declared in public/tracks/albums.json`);
+  }
+  const refuses = (i, l) => { try { parseAlbums(i, l); return false; } catch { return true; } };
+  ok(refuses({ albums: [{ slug: 'declared', name: 'Declared' }] }, []),
+     'an album declared with no list is refused');
+  ok(refuses({ albums: [] }, [{ slug: 'stray', data: { tracks: [] } }]),
+     'a directory holding a list nobody declares is refused');
+  console.log(`  ${declared.length} albums declared, ${lists.length} on disk, in agreement`);
+}
+
 /* ── the run ───────────────────────────────────────────────────────────── */
 
 async function build() {
@@ -359,8 +389,25 @@ async function main() {
     process.exit(1);
   }
 
-  const tracks = parseTracks(JSON.parse(
-    await readFile(join(ROOT, 'public/tracks/playlist.json'), 'utf8')));
+  /* The index names the albums; each album's list and its audio sit in that
+     album's own directory. Both are read here the way the build reads them,
+     and the flattened list is the deck's own. */
+  const trackRoot = join(ROOT, 'public/tracks');
+  const index = JSON.parse(await readFile(join(trackRoot, 'albums.json'), 'utf8'));
+  const lists = [];
+  for (const entry of await readdir(trackRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const list = join(trackRoot, entry.name, 'playlist.json');
+    if (existsSync(list)) {
+      lists.push({ slug: entry.name, data: JSON.parse(await readFile(list, 'utf8')) });
+    }
+  }
+  let tracks = [];
+  try {
+    tracks = parseAlbums(index, lists);
+  } catch (e) {
+    ok(false, `the build would refuse these files: ${e.message}`);
+  }
   const show = parseEpisodes(
     await readFile(join(ROOT, 'public/stories/feed.rss'), 'utf8'));
   const eps = show.episodes;
@@ -387,6 +434,9 @@ async function main() {
        `${t.url} needs escaping to be asked for`);
   }
   console.log(`  ${tracks.length} filenames, none of them needing an escape`);
+
+  console.log('the album index and the directories agree');
+  albumRule(index, lists);
 
   console.log('every item has a page, and nothing else does');
   for (const kind of ['playlist', 'podcast']) {
@@ -446,8 +496,10 @@ async function main() {
       ok(s.kind === item.kind, `${path}: wrong kind baked in`);
       ok(s.title === item.title, `${path}: wrong title baked in`);
       ok(title(body).includes(item.title), `${path}: the title tag is ${title(body)}`);
-      if (item.kind === 'playlist') ok(s.file === item.file, `${path}: wrong file baked in`);
-      else ok(s.url === item.url, `${path}: wrong audio url baked in`);
+      if (item.kind === 'playlist') {
+        ok(s.file === item.file, `${path}: wrong file baked in`);
+        ok(s.album === item.album, `${path}: wrong album baked in`);
+      } else ok(s.url === item.url, `${path}: wrong audio url baked in`);
       ok(body.includes(`href="${SITE_BASE}${path}"`), `${path}: the page does not link to itself`);
     }
 
@@ -511,7 +563,8 @@ async function main() {
 
     console.log('the shell the host needs');
     for (const path of ['/robots.txt', '/site.webmanifest', '/sw.js',
-                        '/tracks/playlist.json', '/stories/feed.rss']) {
+                        '/tracks/albums.json', '/stories/feed.rss',
+                        ...lists.map((l) => `/tracks/${l.slug}/playlist.json`)]) {
       const { status } = await get(path);
       ok(status === 200, `${path} answered ${status}`);
     }

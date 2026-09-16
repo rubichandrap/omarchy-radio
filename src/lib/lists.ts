@@ -1,13 +1,14 @@
-/* The two lists, out of the two files behind them.
+/* The two lists, out of the files behind them.
  *
- * A song is three lines of public/tracks/playlist.json and a file beside it.
- * An episode is an item in the show's feed, mirrored into
- * public/stories/feed.rss. Both come out of here as an Item, which is the
- * shape the deck holds them in too.
+ * A song is three lines of an album's own list, public/tracks/<album>/
+ * playlist.json, and a file beside it. An episode is an item in the show's
+ * feed, mirrored into public/stories/feed.rss. Both come out of here as an
+ * Item, which is the shape the deck holds them in too.
  *
  * Text in, items out, and nothing here reads a file: src/lib/sources.ts is
- * the half that does. That is what lets tools/test-routes.mjs run this same
- * parsing under plain node, where the bundler's imports mean nothing.
+ * the half that does, and tools/test-routes.mjs reads the same files off
+ * disk. That is what lets the same rule — the index and the directories
+ * agree, in both directions — run in the build and in the route test.
  */
 
 import { XMLParser } from 'fast-xml-parser';
@@ -16,26 +17,89 @@ import type { Item, Show } from './item.ts';
 import { hms } from './format.ts';
 import { SHOW, SHOW_HOME, TRACKS_DIR } from './site.ts';
 
-/** public/tracks/playlist.json, as a contributor writes it. */
+/** One album's list, public/tracks/<album>/playlist.json, as a contributor
+    writes it. Its `file` names the MP3 in that same directory. */
 export interface Manifest {
-  station?: string;
-  name?: string;
   tracks?: Partial<Item>[];
 }
 
-export function parseTracks(data: Manifest): Item[] {
-  const tracks = (data.tracks ?? [])
+/** One album, as public/tracks/albums.json declares it. */
+export interface Album {
+  slug: string;
+  name: string;
+}
+
+/** The index: every album, in the order they are listed. */
+export interface AlbumIndex {
+  albums?: Album[];
+}
+
+/** One album's list, paired with the directory it came out of. */
+export interface AlbumList {
+  slug: string;
+  data: Manifest;
+}
+
+/** A song before it has been given an address; assignSlugs() adds kind, slug
+    and key once the whole playlist is known. */
+export type TrackEntry = Omit<Item, 'kind' | 'slug' | 'key'>;
+
+export function parseTracks(data: Manifest, album: string): TrackEntry[] {
+  return (data.tracks ?? [])
     .filter((t): t is Partial<Item> & { title: string } => Boolean(t.title))
     .map((t) => ({
       ...t,
       artist: t.artist ?? '',
+      /* Which album the song is in: its directory, and the segment its audio
+         address carries. */
+      album,
       /* Contributors name the file and nothing else, the way the deck's own
          resolveTrack() takes it. Encoded here so nobody has to hand-escape a
          space or an accent in the manifest, and so the same address survives
          being written into an attribute and asked for over HTTP. */
-      url: t.url || TRACKS_DIR + encodeURIComponent(t.file ?? ''),
+      url: t.url || TRACKS_DIR + album + '/' + encodeURIComponent(t.file ?? ''),
     }));
-  return assignSlugs(tracks, 'playlist');
+}
+
+/** Every song, out of the index and the albums' own lists.
+ *
+ * The lists arrive paired with the directory each was read out of — the build
+ * finds them through the bundler, the route test off disk — and the two
+ * facts have to agree: an album the index declares with no list is a
+ * collection that plays nothing, and a directory holding a list nobody
+ * declared is one that never plays at all. Either one is an error rather than
+ * a playlist quietly missing a collection.
+ *
+ * One flat list, the albums in index order and each album's songs in its own
+ * order, with the slugs assigned once over the lot — so a song's key and its
+ * permalink do not depend on which album it is in.
+ */
+export function parseAlbums(index: AlbumIndex, lists: AlbumList[]): Item[] {
+  const albums = index.albums ?? [];
+  const flat: TrackEntry[] = [];
+
+  for (const album of albums) {
+    const list = lists.find((l) => l.slug === album.slug);
+    if (!list) {
+      throw new Error(
+        `public/tracks/albums.json declares the album "${album.slug}", but ` +
+        `public/tracks/${album.slug}/playlist.json is not there.`,
+      );
+    }
+    flat.push(...parseTracks(list.data, album.slug));
+  }
+
+  for (const { slug } of lists) {
+    if (!albums.some((a) => a.slug === slug)) {
+      throw new Error(
+        `public/tracks/${slug}/playlist.json is not declared in ` +
+        'public/tracks/albums.json. Add it to the index, or take the ' +
+        'directory out.',
+      );
+    }
+  }
+
+  return assignSlugs(flat, 'playlist');
 }
 
 /* Nothing but what a page needs: the deck reads the same feed a moment after
@@ -166,8 +230,8 @@ export function clip(text: string, limit = 190): string {
  * start it on the first tick — before the manifest, before the feed, while
  * the press that opened the link still counts as engagement. */
 export function seedOf(item: Item): Record<string, unknown> {
-  const keep = ['title', 'artist', 'file', 'url', 'explicit', 'lyrics',
-                'ms', 'secs', 'provisional'] as const;
+  const keep = ['title', 'artist', 'file', 'album', 'url', 'explicit',
+                'lyrics', 'ms', 'secs', 'provisional'] as const;
   const seed: Record<string, unknown> = {};
   for (const k of keep) {
     if (item[k] !== undefined && item[k] !== null) seed[k] = item[k];

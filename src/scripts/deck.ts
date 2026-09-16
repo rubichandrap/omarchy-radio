@@ -15,7 +15,7 @@
 import {
   BASE, CANON, LYRICS_DIR, SHOW, SHOW_LYRICS, SHOW_PODCAST, STATION,
   STORIES_FEED, STORIES_TAG, SHOW_HOME as STORIES_HOME,
-  TRACKS_DIR, TRACKS_MANIFEST,
+  TRACKS_DIR, TRACKS_INDEX,
 } from '../lib/site.ts';
 import { assignSlugs, fold } from '../lib/slug.ts';
 import { dateLabel, fmt, hms, lengthLabel, plural } from '../lib/format.ts';
@@ -1561,8 +1561,14 @@ function applyManifest(j: Manifest | null) {
   paintTracks();
 }
 
-/** tracks/playlist.json, as a contributor writes it. */
+/* The merged payload the deck holds and keeps: what the index and the albums
+   made between them. The shape it has always been, so the copy kept from the
+   last visit paints the same list it always did. */
 interface Manifest { tracks?: Item[] }
+
+/** One album, as public/tracks/albums.json declares it. */
+interface Album { slug: string; name: string }
+interface AlbumIndex { albums?: Album[] }
 
 function readManifest(): Manifest | null {
   try { return JSON.parse(localStorage.getItem(STORE_TRACKS) || 'null'); } catch (e) { return null; }
@@ -1590,11 +1596,39 @@ function listSettled() {
   }
 }
 
-function loadTracks() {
-  fetch(TRACKS_MANIFEST).then(function (r) {
-    if (!r.ok) throw new Error('no playlist');
-    return r.json() as Promise<Manifest>;
+/* The index names the albums; each album's list sits beside its own audio and
+   is fetched in parallel, merged into the one flat list the deck has always
+   held. One album failing to arrive fails the load as a whole: the copy kept
+   from the last visit stands and the attempt repeats on the next visit,
+   rather than a playlist quietly missing a collection. */
+function fetchAlbums(): Promise<Manifest> {
+  return fetch(TRACKS_INDEX).then(function (r) {
+    if (!r.ok) throw new Error('no albums');
+    return r.json() as Promise<AlbumIndex>;
   }).then(function (j) {
+    var named = j.albums || [];
+    return Promise.all(named.map(function (a) {
+      var url = TRACKS_DIR + a.slug + '/playlist.json';
+      return fetch(url).then(function (r) {
+        if (!r.ok) throw new Error('no album ' + a.slug);
+        return r.json() as Promise<Manifest>;
+      }).then(function (list) {
+        // Each song is stamped with the album it came out of: the directory
+        // its audio and its list live in.
+        return (list.tracks || []).map(function (t) {
+          return resolveTrack(Object.assign({}, t, { album: a.slug }));
+        });
+      });
+    })).then(function (lists) {
+      var merged: Item[] = [];
+      lists.forEach(function (l) { merged = merged.concat(l); });
+      return { tracks: merged };
+    });
+  });
+}
+
+function loadTracks() {
+  fetchAlbums().then(function (j) {
     // What tuneIn() started, if anything, named by the one thing that
     // survives a reordering.
     var open = S.mode === 'track' && S.tracks[S.ti] ? S.tracks[S.ti].key : '';
@@ -1652,12 +1686,16 @@ function loadTracks() {
 // here so nobody has to hand-escape spaces or accents in the manifest. An
 // entry that already carries a url is left alone.
 //
+// The file names the MP3 in its album's own directory, which is the segment
+// the address carries too.
+//
 // The entry is copied rather than rebuilt field by field, which is how
 // "explicit" used to get lost on the way to the badge that was added for
 // it, and how "lyrics" would have gone the same way.
 function resolveTrack(t: Item): Item {
   if (t.url) return t;
-  return Object.assign({}, t, { url: TRACKS_DIR + encodeURIComponent(t.file || '') });
+  var dir = t.album ? t.album + '/' : '';
+  return Object.assign({}, t, { url: TRACKS_DIR + dir + encodeURIComponent(t.file || '') });
 }
 
 /* ── painting ────────────────────────────────────────── */
@@ -1695,7 +1733,7 @@ function paintLcd() {
     ? [showName(), dateLabel(story.ms || 0), lengthLabel(story.secs || 0)]
         .filter(Boolean).join(' · ')
     : t
-      ? (t.album || t.artist)
+      ? t.artist
       : STATION.tag;
 
   /* The tab names the address, the way the title the page was served with

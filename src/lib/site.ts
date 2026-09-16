@@ -8,9 +8,11 @@ export const SITE_DESC =
   'The community playlist for the Omarchy desktop. Songs about Arch, ' +
   'Hyprland and dotfiles, every one of them sent in as a pull request.';
 
-/** Where the songs live, so they can arrive by pull request. */
+/** Where the songs live, so they can arrive by pull request: an album per
+    directory, its list and its audio side by side. */
 export const TRACKS_DIR = BASE + '/tracks/';
-export const TRACKS_MANIFEST = BASE + '/tracks/playlist.json';
+/** The albums, in the order they are listed. */
+export const TRACKS_INDEX = BASE + '/tracks/albums.json';
 export const LYRICS_DIR = BASE + '/tracks/lyrics/';
 
 /* Omarchy Stories is the show the community makes about running this desktop.
