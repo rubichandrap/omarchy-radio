@@ -1755,7 +1755,7 @@ async function icons({ songs, eps }) {
       if (!ok(shown.length === 1, `${sel} shows one icon, not ${shown.length}`)) continue;
       const i = shown[0];
       ok(has(i, name), `${sel} is ${name}, not ${i.cls.split(' ').join(' ')}`);
-      is(size(i), '18x18', `${sel}'s icon is 18px on the button`);
+      is(size(i), '14x14', `${sel}'s icon is 14px on the button`);
       ok(i.fill === 'none' && i.stroke === 'currentColor',
          `${sel}'s icon is a stroke in the button's colour (fill ${i.fill}, stroke ${i.stroke})`);
       ok(!i.crisp && i.drawn > 0, `${sel}'s icon is drawn, not a lattice cell`);
