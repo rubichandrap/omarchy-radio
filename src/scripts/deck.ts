@@ -2078,17 +2078,25 @@ function pickAlbum(was: string, live: boolean, how?: How) {
   if (S.ti >= 0) standAtHead(l);
 }
 
-/* The list under the deck's feet changed — a scope rather than an item — and
-   the place has to be said again in the list that now plays: the item it
-   stood on when that list carries it, and the head of the list otherwise.
-   Nothing is started here: a change of scope is a place, and a place is not
-   a press. */
-function reseat(before: string) {
-  var l = playingList();
-  if (S.ti < 0) return;
-  var at = before ? indexOfKey(l, before) : -1;
-  if (at >= 0) { anchor(l, at); return; }
-  standAtHead(l);
+/* Leaving an album — for the whole playlist, for home, for an address that
+   names nothing: the songs show whole again, and the deck's place is said
+   again in the flat list — the item it stood on when that list carries it,
+   the head otherwise. Nothing is started: a change of scope is a place, and
+   a place is not a press. Returns whether there was an album to leave, which
+   is what the callers repaint on.
+
+   pickAlbum() is the other direction: a scope entered rather than left. */
+function leaveScope(): boolean {
+  if (!S.album) return false;
+  var before = keyOf(nowItem());
+  S.album = '';
+  if (S.mode === 'track' && S.ti >= 0) {
+    var l = playingList();
+    var at = before ? indexOfKey(l, before) : -1;
+    if (at >= 0) anchor(l, at);
+    else standAtHead(l);
+  }
+  return true;
 }
 
 /* Applies a route that came from outside: a link, the back button, a path
@@ -2104,12 +2112,9 @@ function navigate(r: Route, how?: How): boolean {
        playing keeps playing — going back to the front is not a reason to
        lose your place in a song — and the order is drawn around it in the
        list that now plays. */
-    var wasHome = keyOf(nowItem());
     S.route = '';
-    var hadAlbum = !!S.album;
-    S.album = '';
+    var hadAlbum = leaveScope();
     chose = false;
-    if (S.mode === 'track' && hadAlbum) reseat(wasHome);
     var moved = setTab('songs') || hadAlbum;
     if (!nowItem()) { autostart(how); return true; }
     if (moved) paintAll();
@@ -2147,10 +2152,7 @@ function navigate(r: Route, how?: How): boolean {
      around whatever is playing. The episodes leave the album in view alone,
      which is what brings it back when the songs come back. */
   if (!r.slug) {
-    var wasList = keyOf(nowItem());
-    var hadScope = false;
-    if (r.kind === 'playlist' && S.album) { S.album = ''; hadScope = true; }
-    if (hadScope && S.mode === 'track') reseat(wasList);
+    var hadScope = r.kind === 'playlist' ? leaveScope() : false;
     showTab(spec.tab, how);
     // The rows changed even where the tab did not.
     if (hadScope) paintAll();
@@ -3063,14 +3065,15 @@ function boot() {
     if (navigate(r, 'replace')) return;
     /* A route that names nothing here is not a reason to go quiet: the
        playlist answers, and the address stops claiming otherwise. */
-    var wasPop = keyOf(nowItem());
-    var hadPop = !!S.album;
+    var hadPop = leaveScope();
     S.route = r.known ? r.kind : '';
-    S.album = '';
     chose = false;
-    if (hadPop && S.mode === 'track') reseat(wasPop);
     if (!nowItem()) autostart('replace');
-    else syncRoute('replace');
+    else {
+      // The rows changed even where the tab did not.
+      if (hadPop) paintAll();
+      syncRoute('replace');
+    }
   });
 
   /* A link from before the paths existed, followed in this tab: the
