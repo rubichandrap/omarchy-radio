@@ -35,8 +35,10 @@ export const getStaticPaths = (() => {
     props: {
       track, tracks, show,
       /* The album the song is in, by name: the page says where the song comes
-         from, and every song is in exactly one. */
-      albumName: albums.find((a) => a.slug === track.album)?.name ?? '',
+         from, and every song is in exactly one — readTracks() stamps a song
+         with the directory its list was read out of, and refuses a directory
+         the index does not declare. */
+      albumName: albums.find((a) => a.slug === track.album)!.name,
     },
   }));
 }) satisfies GetStaticPaths;
@@ -60,8 +62,7 @@ const audio = `${CANON}/${track.url.replace(/^\/+/, '')}`;
     title: `${track.title}${byline} · Omarchy Radio`,
     description:
       `${track.title}${byline}, on Omarchy Radio: ` +
-      (albumName ? `a song from the ${albumName} album.` : 'a song from the playlist.') +
-      ' Press play.',
+      `a song from the ${albumName} album. Press play.`,
     path,
     ogType: 'music.song',
     extra: audioMeta(audio),
