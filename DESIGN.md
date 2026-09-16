@@ -556,7 +556,7 @@ next was a drawing exercise.
 They are Lucide's now, through `@lucide/astro`, and `src/components/Icon.astro`
 is the whole of the mapping — a name the components call an icon by, and the
 drawing that name is. The build renders them: inline svg, stroked
-in `currentColor` at the size the context calls for, 18px on the six buttons
+in `currentColor` at the size the context calls for, 14px on the six buttons
 so none of them weighs more than another and 12px on the ones that sit in a
 line of text. One package is the only source — nothing vendored, no icon font
 or sprite in the load — and a name with no mapping fails the build rather than
