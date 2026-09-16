@@ -515,6 +515,11 @@ async function main() {
       const { status } = await get(path);
       ok(status === 200, `${path} answered ${status}`);
     }
+    // The one address in robots.txt that has to be this site's own: a stale
+    // one sends the crawlers to a deploy that is not here any more.
+    const { body: robotsTxt } = await get('/robots.txt');
+    ok(robotsTxt.includes(`Sitemap: ${CANON}/sitemap.xml`),
+       `robots.txt names another sitemap (${(robotsTxt.match(/Sitemap:.*/) || ['none'])[0]})`);
     ok(existsSync(join(DIST, '.nojekyll')), 'dist/.nojekyll is missing');
     if (existsSync(join(DIST, 'CNAME'))) {
       ok((await readFile(join(DIST, 'CNAME'), 'utf8')).trim().length > 0,
