@@ -801,6 +801,9 @@ window.__box = function (sel) {
   return {
     left: r.left, right: r.right, top: r.top, bottom: r.bottom,
     w: r.width, h: r.height,
+    /* The width the stylesheet asked for: a rect on this canvas comes back
+       multiplied by the fit, a computed width does not. */
+    cw: parseFloat(cs.width),
     bl: parseFloat(cs.borderLeftWidth), br: parseFloat(cs.borderRightWidth),
     bg: cs.backgroundColor, fg: cs.color, edge: cs.borderTopColor
   };
@@ -956,8 +959,11 @@ async function controlGroups() {
          Math.round(n['#repeat'].right) === Math.round(strip.right),
          'the buttons fill the width, both strips of them');
 
-      /* And at 900px, the edge of the rule itself, where the layout stops
-         being a narrow one. */
+      /* At 900px the rule still takes the pixel with it — `max-width: 900px` —
+         so what is asserted here is the narrow layout at its own last pixel,
+         which is why the wait below sees the buttons stretched and not the
+         desktop 44px. One pixel up, the rule lets go, and that is the check
+         that the edge is the rule's and not just a wider viewport. */
       await tab.send('Emulation.setDeviceMetricsOverride',
                      { width: 900, height: 900, deviceScaleFactor: 1, mobile: false });
       const edge = await until('the controls to lay out at 900px', async () => {
@@ -967,8 +973,28 @@ async function controlGroups() {
       if (edge) {
         const e = await row();
         ok(BUTTONS.every((sel) => Math.round(e[sel].top) === Math.round(e['#prev'].top)),
-           'and at 900px the two strips are one row still');
-        is(gap('#next', '#shuffle', e), 8, 'with the gap held at the rule\'s own edge');
+           'at 900px, the narrow rule\'s own last pixel, the two strips are one row still');
+        is(gap('#next', '#shuffle', e), 8, 'with the 8px seam held there too');
+        ok(Math.round(e['#prev'].w) !== 44, 'and the strip still stretched, not the desktop width');
+      }
+
+      await tab.send('Emulation.setDeviceMetricsOverride',
+                     { width: 901, height: 900, deviceScaleFactor: 1, mobile: false });
+      const over = await until('the controls to lay out at 901px', async () => {
+        const st = await box('#prev');
+        return st && Math.round(st.cw) === 44 ? st : null;
+      });
+      if (over) {
+        const o = await row();
+        /* A rect on the scaled canvas comes back multiplied by the fit, the
+           computed width does not; the ratio is what puts the seam back in
+           the units the stylesheet drew it in. */
+        const scale = over.w / over.cw;
+        ok(BUTTONS.every((sel) => Math.round(o[sel].cw) === 44),
+           'at 901px the rule lets go: every button is back to the desktop 44px');
+        is(Math.round(gap('#next', '#shuffle', o) / scale), 8, 'and the two strips keep their 8px');
+        ok(BUTTONS.every((sel) => Math.round(o[sel].top) === Math.round(o['#prev'].top)),
+           'on one row');
       }
     }
     await tab.send('Emulation.clearDeviceMetricsOverride');
