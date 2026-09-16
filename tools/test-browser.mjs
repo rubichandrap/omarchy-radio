@@ -666,9 +666,11 @@ async function albumsAtTheirAddresses({ songs, albums }) {
  * albums are declared, and the readout names the album while one of its songs
  * is playing — the panel can be showing the other list.
  *
- * The last check is the gesture claim, and it is the one that wants a deck
- * which was refused the sound: a press on an album link is a real pointer
- * gesture, and what it starts has to be audible rather than silent. */
+ * The last checks are the gesture claim, and they want a deck which was
+ * refused the sound: a press on an album link is a real pointer gesture, and
+ * what it starts has to be audible rather than silent — the album it replaces,
+ * and the album the song is already in, where the press buys the sound
+ * without replacing anything. */
 async function albumsPlay({ songs, albums }) {
   section('an album is what plays');
   if (!ok(albums.length >= 2, 'the index declares two albums or more')) return;
@@ -946,6 +948,27 @@ async function albumsPlay({ songs, albums }) {
     }, 10000);
     if (q) is(playingNow(q).path, mine[0].path,
               'a real pointer press on the album link starts the album, and audibly');
+
+    /* And the album the playing song is already in: nothing is replaced, and
+       the song is not started again — but the press is still the gesture the
+       arrival could not be, so the sound comes on where the track has got to.
+       A fresh document, because this one has had its press already. */
+    await quietTab.go('/');
+    let back = await until('the deck to arrive playing muted again', async () => {
+      const st = await quietTab.state();
+      return st.playing && st.at > 0 && st.muted ? st : null;
+    });
+    if (!back) return;
+    await quietTab.click(`#albs a[data-album="${first.slug}"]`);
+    const heard = await until('the sound to come on', async () => {
+      const st = await quietTab.state();
+      const p = playingNow(st);
+      return st.playing && st.muted === false && p && p.album === first.slug ? st : null;
+    }, 10000);
+    if (heard) {
+      is(heard.src, back.src, 'pressing the album the song is already in keeps the song');
+      is(heard.at >= back.at, true, 'and buys the sound without starting it again');
+    }
   } finally {
     await quietTab.close();
     await refused.close();

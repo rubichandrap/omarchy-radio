@@ -2216,7 +2216,15 @@ function wireLinks() {
     if (!r.known) return; // a file, the feed, some other page: let it load
 
     e.preventDefault();
-    if (navigate(r, 'push')) return;
+    if (navigate(r, 'push')) {
+      /* A press the deck answers without starting anything — an album link
+         whose album already holds the song, `all`, home, the row that is
+         already playing — is still a press. A deck that arrived muted is
+         playing silent, and this is the gesture that pays for the sound;
+         a path that started something has bought it already. */
+      if (silenced()) unsilence();
+      return;
+    }
     // Ours, and it names nothing this deck is holding. The page may well
     // exist, so let the browser go and get it rather than sitting here.
     location.href = u.href;
