@@ -43,14 +43,16 @@ interface Props {
 
 const { track, tracks, show } = Astro.props;
 const path = `/${track.key}`;
-const artist = track.artist || 'unknown';
+/* A song with no artist is named by its title alone: a byline for a name the
+   file does not carry reads as a page about somebody who is not there. */
+const byline = track.artist ? ` by ${track.artist}` : '';
 const audio = `${CANON}/${track.url.replace(/^\/+/, '')}`;
 ---
 <Deck
   head={{
-    title: `${track.title} by ${artist} · Omarchy Radio`,
+    title: `${track.title}${byline} · Omarchy Radio`,
     description:
-      `${track.title} by ${artist}, on Omarchy Radio: a song about the Omarchy desktop, ` +
+      `${track.title}${byline}, on Omarchy Radio: a song about the Omarchy desktop, ` +
       'made by somebody who runs it. Press play.',
     path,
     ogType: 'music.song',

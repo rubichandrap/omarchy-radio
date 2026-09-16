@@ -1614,9 +1614,15 @@ function fetchAlbums(): Promise<Manifest> {
         return r.json() as Promise<Manifest>;
       }).then(function (list) {
         // Each song is stamped with the album it came out of: the directory
-        // its audio and its list live in.
+        // its audio and its list live in. An entry with no artist gets the
+        // empty one, which is what the row and the marquee read as "none":
+        // the file is the only place the shape of a song lives, so the
+        // missing key is filled here rather than at every reader of it.
         return (list.tracks || []).map(function (t) {
-          return resolveTrack(Object.assign({}, t, { album: a.slug }));
+          return resolveTrack(Object.assign({}, t, {
+            artist: t.artist || '',
+            album: a.slug
+          }));
         });
       });
     })).then(function (lists) {
@@ -1722,8 +1728,10 @@ function paintLcd() {
       ? 'playlist · track ' + (S.ti + 1)
       : 'playlist';
 
+  /* A song with no artist is its title alone: joining an empty one would
+     leave the separator hanging off the end of the marquee. */
   var marquee = it
-    ? (it.title + '  —  ' + it.artist)
+    ? (it.artist ? it.title + '  —  ' + it.artist : it.title)
     : (STATION.name + '  —  ' + STATION.tag);
   Array.from(el.marq.children).forEach(function (n) { n.textContent = marquee; });
 
@@ -1747,7 +1755,7 @@ function paintLcd() {
   document.title = chose && story
     ? story.title + ' · ' + showName()
     : chose && t
-      ? t.title + ' by ' + t.artist + ' · Omarchy Radio'
+      ? (t.artist ? t.title + ' by ' + t.artist : t.title) + ' · Omarchy Radio'
       : 'Omarchy Radio';
 
   paintClock();

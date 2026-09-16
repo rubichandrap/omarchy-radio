@@ -30,7 +30,9 @@ when the pull request lands, along with its card and its sitemap entry.
 
 ## Albums
 
-The community's songs are the `omarchy` album, and the folders look like this:
+The community's songs are the `omarchy` album. The `lofi` album is a
+collection from elsewhere — the [Open Lo-Fi](../README.md) release, whose
+tracks carry no artist. The folders look like this:
 
 ```
 tracks/
@@ -38,6 +40,9 @@ tracks/
   omarchy/
     playlist.json     the community's songs, in the order they play
     dan-t-play-the-machine.mp3
+  lofi/
+    playlist.json     the collection's tracks, in the order they play
+    2-am-debug-loop.mp3
 ```
 
 An album is a directory and a line. To add one, make the directory, write its
@@ -53,7 +58,7 @@ each is refused rather than playing nothing.
 | field | required | notes |
 | --- | --- | --- |
 | `title` | yes | shown in the playlist and the marquee |
-| `artist` | yes | shown under the title |
+| `artist` | no | shown under the title; leave it out and the row is the title alone |
 | `file` | yes | filename in the album's directory, exactly as on disk |
 | `url` | no | full URL for a track hosted elsewhere, used instead of `file` |
 | `explicit` | no | `true` shows an EXPLICIT badge beside the title |

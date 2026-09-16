@@ -106,3 +106,12 @@ Tracks in this repository follow the Omarchy community guidelines:
 - **Submission format:** Add an MP3 to `public/tracks/<album>/<artist-slug>-<title-slug>.mp3` and register the entry in that album's `public/tracks/<album>/playlist.json`. The albums themselves are declared in `public/tracks/albums.json`. Explicit tracks should be tagged accordingly.
 - Detailed submission rules: [`public/tracks/README.md`](public/tracks/README.md).
 - Podcast feed mirroring rules: [`public/stories/README.md`](public/stories/README.md).
+
+---
+
+## Lo-Fi Collection
+
+The `lofi` album is [Open Lo-Fi](https://github.com/btahir/open-lofi): 166
+instrumentals released into the public domain under CC0-1.0. The copies in this
+repository are 128 kbps transcodes; the original release is where the
+untranscoded set lives.

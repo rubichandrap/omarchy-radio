@@ -568,6 +568,40 @@ async function reveal({ songs }) {
   }
 }
 
+/* A song with no artist, which is what the lo-fi collection is made of: the
+   row is the title alone and the marquee joins the two only when there are
+   two. Joined against a missing artist, both leave the separator hanging off
+   the end — the row an empty line, the readout a dash and nothing. */
+async function artistless({ songs }) {
+  section('a song with no artist');
+  const browser = await Browser.launch('no-user-gesture-required');
+  const tab = await browser.tab();
+  try {
+    const song = songs.find((s) => !s.artist);
+    if (!ok(song, 'the playlist has a song with no artist in it')) return;
+
+    await tab.go(song.path);
+    const s = await until('the song, out of the whole playlist', async () => {
+      const st = await tab.state();
+      return st.playing && st.rowHref === song.path ? st : null;
+    });
+    if (!s) return;
+
+    is(s.row, song.title, 'the row names the song');
+    is(s.marquee, song.title, 'the readout is the title alone, with no separator hanging off it');
+    is(s.title, `${song.title} · Omarchy Radio`, 'and the tab names it the same way');
+
+    const sub = await tab.eval(`(function () {
+      var on = document.querySelector('#tracks li.is-on .tr-artist');
+      return on ? on.textContent : null;
+    })()`);
+    is(sub, '', 'with nothing under the title');
+  } finally {
+    await tab.close();
+    await browser.close();
+  }
+}
+
 /* The repeat modes, which are what an item running out means. `all` is the
    default every section above leans on; this one pins the other two. Both are
    checked the way the rotation is — by dropping the needle near the end of the
@@ -1099,8 +1133,23 @@ async function shuffleOrder({ songs }) {
     });
     if (head) ok(true, `the cycle after it opens elsewhere (${head}, after ${last})`);
 
-    // ── a row pressed out of turn: it becomes where the deck stands ──
-    const pick = songs[10];
+    /* ── a row pressed out of turn: it becomes where the deck stands ──
+       The address is what this one is read off, and the walk above has just
+       spent a couple of hundred address writes in a few seconds: a browser
+       stops honouring same-document history updates in a burst like that
+       (measured: about 200, then dropped until the page settles), which
+       would leave the press with nothing to move. So the deck is given a
+       page the walk has not spent — the row it is standing on, with shuffle
+       still on from the store — and the press below lands on a fresh
+       document's own budget. */
+    const standing = await tab.state();
+    await tab.go(standing.rowHref);
+    await until('the deck on the row it was standing on', async () => {
+      const st = await tab.state();
+      return st.playing && st.rowHref === standing.rowHref ? st : null;
+    });
+
+    const pick = songs[10].path === standing.rowHref ? songs[11] : songs[10];
     await tab.click(`a.track[href="${pick.path}"]`);
     s = await until('the pressed row', async () => {
       const st = await tab.state();
@@ -1836,6 +1885,7 @@ try {
   await autoplayRefused(site);
   await find(site);
   await reveal(site);
+  await artistless(site);
   await stalePlaylist(site);
   await desktopTheme();
   await icons(site);

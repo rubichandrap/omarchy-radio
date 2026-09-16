@@ -95,7 +95,9 @@ export function playlistNode(tracks: Item[]) {
       position: i + 1,
       name: t.title,
       url: `${CANON}/${t.key}`,
-      byArtist: { '@type': 'Person', name: t.artist || 'unknown' },
+      // A song with no artist credits nobody: a Person called "unknown" is a
+      // name the file does not carry.
+      ...(t.artist ? { byArtist: { '@type': 'Person', name: t.artist } } : {}),
     })),
   };
 }
@@ -107,7 +109,7 @@ export function songNode(track: Item, path: string) {
     '@id': `${CANON}${path}#recording`,
     name: track.title,
     url: CANON + path,
-    byArtist: { '@type': 'Person', name: track.artist || 'unknown' },
+    ...(track.artist ? { byArtist: { '@type': 'Person', name: track.artist } } : {}),
     inPlaylist: { '@id': `${CANON}/playlist#playlist` },
     publisher: { '@id': ORG },
     isFamilyFriendly: !track.explicit,

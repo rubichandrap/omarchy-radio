@@ -1,5 +1,6 @@
 {
   "albums": [
-    { "slug": "omarchy", "name": "Omarchy" }
+    { "slug": "omarchy", "name": "Omarchy" },
+    { "slug": "lofi", "name": "Open Lo-Fi" }
   ]
 }
