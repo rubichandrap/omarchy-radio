@@ -30,8 +30,8 @@ Full credit belongs to [omacom/radio.omarchy.org](https://github.com/omacom/radi
 
 | Feature | Status | Description |
 |---|---|---|
-| **Shuffle Mode** | Active | Walk a shuffled play order: every track once per cycle, a fresh draw each time |
-| **Repeat Modes** | Active | Cycle between Repeat Off, Repeat One (loop track), and Repeat All (loop playlist) |
+| **Shuffle Mode** | Active | Walk a shuffled play order: every track of the list that plays once per cycle, a fresh draw each time |
+| **Repeat Modes** | Active | Cycle between Repeat Off, Repeat One (loop track), and Repeat All (loop the list that plays) |
 | **Albums** | Active | The playlist is a set of albums; each answers at its own address (`/omarchy`, `/lofi`), the selector over the songs picks which one plays, and `all` is the whole playlist |
 | **Playback Queue** | In Progress | "Play Next" and "Add to Queue" actions without interrupting the current track |
 | **Custom Playlists** | In Progress | Create, manage, and switch between curated subsets of tracks |

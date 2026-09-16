@@ -1374,10 +1374,10 @@ function tuneIn() {
   if (!r.known || !r.kind) { autostart('replace'); return; }
   S.route = r.kind;
 
-  /* A list, rather than something in one — or an album, which is a list of
-     its own at the root: the songs run while the panel is the album's. What
-     plays is the playlist either way, so an arrival here starts the deck the
-     way any arrival does, and the address it was asked for stands. */
+  /* A list, rather than something in one — or an album, which sits at the
+     root as a list of its own: the album's songs become the list that plays,
+     so an arrival here starts it the way any arrival starts the deck, and
+     the address it was asked for stands. */
   if (!r.slug) {
     if (r.album) S.album = r.album;
     setTab(LISTS[r.kind].tab);
