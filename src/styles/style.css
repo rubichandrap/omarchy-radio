@@ -914,11 +914,14 @@ a, button, [role="slider"] { -webkit-tap-highlight-color: transparent; }
 /* The album selector: the seg's boxes and the seg's links, in a row of its
    own under the panel head, because it grows with the index and the head
    already holds the switch. It narrows the songs rather than being a third
-   list, so it is over them and nowhere else. */
+   list, so it is over them and nowhere else — and its links wear a thinner
+   box than the switch's, because the switch chooses the list and this row
+   only narrows it: the size says so before a press does. */
 .albs {
   margin: 0 20px 12px;
   align-self: flex-start;
 }
+.albs .seg-b { padding: 3px 8px; }
 
 .tr-head[hidden], .tracks[hidden] { display: none; }
 

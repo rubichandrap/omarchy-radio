@@ -36,7 +36,8 @@
        a new cycle opened on a different row, and the deck it survives
      - an album is a place: every album answers at its own address at the site
        root with its rows, its title and its note, the selector over the songs
-       marks the album the address names, and the numbers count within it
+       marks the album the address names, the selector's links draw a smaller
+       box than the switch's, and the numbers count within it
      - an album is what plays: a play seats the list the deck walks, a pick —
        an album link, `all`, home — is a look that moves the rows and leaves
        the sound alone, and the readout names the album the playing song came
@@ -514,7 +515,9 @@ async function find({ songs }) {
  * Picking one is a look: the rows, the address, the numbering and the
  * selector move, and the sound does not — that is the next section's
  * business. This one is about the place itself: the address, the rows, the
- * numbering, and the selector that marks it. */
+ * numbering, and the selector that marks it — drawn smaller than the switch
+ * over the lists, because the switch chooses one and the selector only
+ * narrows it. */
 async function albumsAtTheirAddresses({ songs, albums }) {
   section('an album is a place');
   const browser = await Browser.launch('no-user-gesture-required');
@@ -551,6 +554,68 @@ async function albumsAtTheirAddresses({ songs, albums }) {
        ['all'].concat(albums.map((a) => a.name.toLowerCase())).join(','),
        'it lists all and every album, in the order the index declares them');
     is(s.albums.current.join(','), 'all', 'and on the unscoped list the one it marks is all');
+
+    /* The selector is smaller than the switch, in the same seg: the switch
+       chooses the list and this row only narrows it, and the box says so
+       before a press does. The claim is measured against the switch's own
+       links — the thinner padding, the same type size, a shorter box. */
+    const drawn = async (width) => {
+      const back = await tab.eval('window.innerWidth');
+      await tab.send('Emulation.setDeviceMetricsOverride',
+                     { width, height: 900, deviceScaleFactor: 1, mobile: false });
+      // The override lands a beat after the call; the layout read is the one
+      // for this width, not for the one before it.
+      await until(`the ${width}px viewport`, async () =>
+        (await tab.eval('window.innerWidth')) === width ? true : null);
+      const out = await tab.eval(`(function () {
+        var shot = function (el) {
+          var cs = getComputedStyle(el);
+          return {
+            pad: [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft].join(' '),
+            fs: cs.fontSize,
+            w: parseFloat(cs.width), h: parseFloat(cs.height)
+          };
+        };
+        var links = Array.prototype.map.call(document.querySelectorAll('#albs a.seg-b'), shot);
+        var swap = document.getElementById('tabSongs');
+        var row = document.getElementById('albs');
+        return links.length && swap && row
+          ? { album: links, swap: shot(swap), row: row.clientWidth }
+          : null;
+      })()`);
+      await tab.send('Emulation.clearDeviceMetricsOverride');
+      // And the viewport is back before anything else is pressed in it: a
+      // click read against a half-restored layout lands where the link is not.
+      await until('the viewport to come back', async () =>
+        (await tab.eval('window.innerWidth')) === back ? true : null);
+      return out;
+    };
+
+    const wide = await drawn(1200);
+    if (ok(wide, 'the album links and the switch are both drawn')) {
+      ok(wide.album.every((l) => l.pad === '3px 8px 3px 8px'),
+         `the album links draw the thinner box (${wide.album.map((l) => l.pad).join(' / ')})`);
+      ok(wide.album.every((l) => l.fs === '10px'), 'keeping the type size they had');
+      ok(wide.album.every((l) => l.fs === wide.swap.fs), 'which is the switch’s own');
+      ok(wide.album.every((l) => l.h < wide.swap.h),
+         `and every one stands shorter than the switch ` +
+         `(${wide.album.map((l) => l.h).join('/')} against ${wide.swap.h})`);
+    }
+
+    /* The narrow layout is untouched: at the rule's own last pixel and below
+       it, one row, the width of the panel, every album a fingertip. */
+    for (const width of [900, 800]) {
+      const slim = await drawn(width);
+      if (!ok(slim, `the album row is drawn at ${width}px too`)) continue;
+      ok(slim.album.every((l) => l.h === 44), `at ${width}px every album link is still a 44px target`);
+      /* The links grow from nothing, so what they share comes out equal up to
+         the one border the shared edges are drawn with. */
+      const even = slim.album.every((l) => Math.abs(l.w - slim.album[0].w) <= 1.1);
+      const spans = Math.abs(slim.album.reduce((n, l) => n + l.w, 0) - slim.row) < 1;
+      ok(even && spans,
+         `and the row is one full width, the albums sharing it evenly ` +
+         `(${slim.album.map((l) => l.w).join('/')} in ${slim.row})`);
+    }
 
     // Picking an album is a press on a link: a place, and no reload.
     await tab.click(`#albs a[data-album="${album.slug}"]`);
