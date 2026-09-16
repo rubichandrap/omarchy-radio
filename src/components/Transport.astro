@@ -8,14 +8,16 @@
  * JavaScript. */
 import Icon from './Icon.astro';
 ---
-<section class="transport" aria-label="Playback controls">
+<section class="transport" aria-label="Playback">
   <div class="tbtns">
     <button type="button" class="tb" id="prev" aria-label="Previous track"><Icon name="prev" /></button>
     <button type="button" class="tb tb-play" id="toggle" aria-label="Play or pause"><Icon name="play" /><Icon name="pause" /></button>
     <button type="button" class="tb" id="stop" aria-label="Stop"><Icon name="stop" /></button>
     <button type="button" class="tb" id="next" aria-label="Next track"><Icon name="next" /></button>
-    <button type="button" class="tb tb-shuffle" id="shuffle" aria-label="Shuffle: off" aria-pressed="false"><Icon name="shuffle" /></button>
-    <button type="button" class="tb tb-repeat" id="repeat" aria-label="Repeat mode: all" aria-pressed="true"><Icon name="repeat-off" /><Icon name="repeat" /><Icon name="repeat-one" /></button>
+    <div class="tbgroup" role="group" aria-label="Mode controls">
+      <button type="button" class="tb tb-shuffle" id="shuffle" aria-label="Shuffle: off" aria-pressed="false"><Icon name="shuffle" /></button>
+      <button type="button" class="tb tb-repeat" id="repeat" aria-label="Repeat mode: all" aria-pressed="true"><Icon name="repeat-off" /><Icon name="repeat" /><Icon name="repeat-one" /></button>
+    </div>
   </div>
 
   <div class="seek" id="seek" role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">

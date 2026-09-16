@@ -530,8 +530,16 @@ a, button, [role="slider"] { -webkit-tap-highlight-color: transparent; }
    off the transport's. It is the margin the buttons already build their
    strips out of, at the one place it is not a shared border — which is the
    whole of the difference between a button that moves playback and one that
-   holds a setting. */
-.tb-shuffle { margin-left: 8px; }
+   holds a setting. The group element carries that difference to a reader too,
+   so six buttons are not one run of six to a screen reader; `display:
+   contents` leaves it no box, and the six stay the flex items they were, the
+   same widths down to the subpixel. */
+.tbgroup { display: contents; }
+
+/* The group's own first button carries the seam: the group has no box, and
+   `.tb:first-child` — which the four transport buttons still want — would
+   otherwise answer for it. */
+.tbgroup > .tb:first-child { margin-left: 8px; }
 
 .tb:hover { border-color: var(--ac); color: var(--ac); z-index: 1; }
 
