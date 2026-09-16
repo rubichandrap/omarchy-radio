@@ -1378,7 +1378,14 @@ async function autoplayAllowed({ songs, eps }) {
       ok(s.at > 0, `the audio is actually moving (${s.at.toFixed(2)}s in)`);
       is(s.refused.length, 0, 'nothing was refused');
       is(s.row, wanted.title, 'the row for it is the one lit');
-      is(s.state, 'playing', 'the row says playing');
+      /* The row's cell is painted by the deck's own `playing` event, a moment
+         after the element starts: waiting for the element is not waiting for
+         the paint, so this waits for the row. */
+      const lit = await until('the row to say playing', async () => {
+        const st = await tab.state();
+        return st.state === 'playing' ? st : null;
+      });
+      ok(lit, `the row says playing (it said "${s.state}")`);
       ok(s.title.includes(wanted.title), `the tab is named after it: ${s.title}`);
       ok(s.marquee.includes(wanted.title), `the deck reads it out: ${s.marquee}`);
       is(s.canonical, `https://radio.omarchy.org${song}`, 'the canonical link');
@@ -1590,7 +1597,11 @@ async function autoplayAllowed({ songs, eps }) {
     if (s) {
       is(s.copied[0], BASE + song, 'the # puts the whole address on the clipboard');
       is(s.path, at, 'and pressing it does not navigate anywhere');
-      ok(/copied/.test(s.status), `the deck says so: "${s.status.trim()}"`);
+      /* The status line is the media element's to write as well, so what is
+         checked is that the deck said so, not that it is still saying it a
+         moment later. */
+      ok(s.statuses.includes('link copied'),
+         `the deck says so (said: ${s.statuses.join(' / ')})`);
     }
 
     // ── /playlist and /podcast are pages of their own ──
@@ -1632,8 +1643,14 @@ async function autoplayRefused({ songs }) {
 
     is(s.muted, true, 'it is playing, and it is muted, having been refused the sound');
     ok(s.refused.includes('NotAllowedError'), 'the refusal is the one it acted on');
-    ok(/muted/.test(s.status), `and the status says which kind of playing ("${s.status.trim()}")`);
-    console.log(`  it says: ${JSON.stringify(s.status.trim())}`);
+    /* The deck writes which kind of playing in its own `playing` event, a
+       moment after the element starts, so this waits for the word rather
+       than reading a status the element may still be writing. */
+    const quiet = await until('the deck to say it is playing muted', async () => {
+      const st = await tab.state();
+      return st.statuses.some((t) => /muted/.test(t)) ? st : null;
+    });
+    ok(quiet, `and the status says which kind of playing (said: ${(quiet || s).statuses.join(' / ')})`);
     ok(decodeURIComponent(s.src).includes(wanted.file), 'it is the song the link named');
     is(s.path, wanted.path, 'the address still names it');
     is(s.row, wanted.title, 'and its row is the one lit');
@@ -1647,7 +1664,9 @@ async function autoplayRefused({ songs }) {
     });
     if (s) {
       is(s.muted, false, 'a press anywhere turns the sound on');
-      is(s.status.trim(), 'playing', 'and the status stops qualifying it');
+      /* Same again: the element is still writing the status as the sound
+         comes on, so the claim is that the deck stopped qualifying it. */
+      ok(s.statuses.includes('playing'), 'and the status stops qualifying it');
       ok(s.at >= wasAt, `it carries on from where it was, not from the top (${wasAt} -> ${s.at})`);
       ok(decodeURIComponent(s.src).includes(wanted.file), 'still the same song');
       is(s.path, wanted.path, 'and the address is unchanged');
