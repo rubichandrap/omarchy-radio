@@ -703,6 +703,15 @@ async function main() {
       const { status } = await get(path);
       ok(status === 200, `${path} answered ${status}`);
     }
+    /* The worker's precache list is written by hand in public/sw.js, so a new
+       album is a line there or a cold offline visit has no rows for it. The
+       index is the declaration and the worker is a second list nobody derives
+       from it, so hold the two together here. */
+    const sw = await readFile(join(ROOT, 'public/sw.js'), 'utf8');
+    for (const path of ['/tracks/albums.json',
+                        ...dirs.filter((d) => d.list).map((d) => `/tracks/${d.slug}/playlist.json`)]) {
+      ok(sw.includes(path), `public/sw.js does not precache ${path}`);
+    }
     // The one address in robots.txt that has to be this site's own: a stale
     // one sends the crawlers to a deploy that is not here any more.
     const { body: robotsTxt } = await get('/robots.txt');
