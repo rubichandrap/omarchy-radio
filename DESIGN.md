@@ -253,7 +253,7 @@ pixel background from an audio analyser. Nobody has to be talked into anything.
 | Reduced motion | draws, frozen at `t = 0` | does not draw |
 | Small labels | 3×5 pixel font | 9px uppercase, `.22em` tracking |
 | Readouts | none | VT323 |
-| Stack | React, Vite, Tailwind, shadcn | Astro, one stylesheet, one script |
+| Stack | React, Vite, Tailwind, shadcn | Astro, a bundled sheet plus a font sheet, one script |
 
 ---
 
