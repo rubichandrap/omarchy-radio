@@ -343,6 +343,14 @@ a, button, [role="slider"] { -webkit-tap-highlight-color: transparent; }
   letter-spacing: .28em;
   text-transform: uppercase;
   color: var(--c2);
+  /* The heading gives way before the switch does: it takes what room is
+     left, and its words end in an ellipsis rather than wrapping the buttons
+     onto a row of their own. */
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .panel-meta {
@@ -881,6 +889,8 @@ a, button, [role="slider"] { -webkit-tap-highlight-color: transparent; }
   display: flex;
   align-items: center;
   gap: 8px;
+  /* Beside a heading that can give way, the buttons never do. */
+  flex: none;
 }
 
 /* Two lists, one panel. A pair of pills would read as two more buttons in a

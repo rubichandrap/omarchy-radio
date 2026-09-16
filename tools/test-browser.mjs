@@ -34,6 +34,8 @@
        mode's own face after a reload
      - the shuffle order: a permutation of the list walked one row at a time,
        a new cycle opened on a different row, and the deck it survives
+     - the panel head on a phone: the heading and the switch share one row at
+       390px, the heading giving way with an ellipsis rather than wrapping
      - an album is a place: every album answers at its own address at the site
        root with its rows, its title and its note, the selector over the songs
        marks the album the address names, the selector's links draw a smaller
@@ -496,6 +498,76 @@ async function find({ songs }) {
       return st.tab === 'tabPodcast' ? st : null;
     });
     if (s) is(s.query, '', 'switching lists clears the query rather than filtering the other one');
+  } finally {
+    await tab.close();
+    await browser.close();
+  }
+}
+
+/* The panel head on a phone.
+ *
+ * The heading over the list and the switch beside it share one row at every
+ * width. The heading takes what room is left and ends in an ellipsis when its
+ * words do not fit; the switch never leaves the row, and never leaves the
+ * panel. The podcast's own heading is the long one. */
+async function panelHeadOnAPhone() {
+  section('the panel head on a phone');
+  const browser = await Browser.launch('no-user-gesture-required');
+  const tab = await browser.tab();
+  try {
+    await tab.go('/podcast');
+    const s = await until('the panel to say what it is showing', async () => {
+      const st = await tab.state();
+      return st.panel ? st : null;
+    });
+    if (!ok(s, 'the panel names the show')) return;
+
+    const drawn = async (width) => {
+      const back = await tab.eval('window.innerWidth');
+      await tab.send('Emulation.setDeviceMetricsOverride',
+                     { width, height: 900, deviceScaleFactor: 1, mobile: false });
+      // The override lands a beat after the call; the layout read is the one
+      // for this width, not for the one before it.
+      await until(`the ${width}px viewport`, async () =>
+        (await tab.eval('window.innerWidth')) === width ? true : null);
+      const out = await tab.eval(`(function () {
+        var head = document.querySelector('.panel-head');
+        var title = head.querySelector('.panel-title');
+        var btns = head.querySelector('.head-btns');
+        var panel = document.querySelector('.playlist');
+        var box = function (el) {
+          var r = el.getBoundingClientRect();
+          return { l: r.left, r: r.right, t: r.top, b: r.bottom };
+        };
+        return title && btns
+          ? { title: box(title), btns: box(btns), panel: box(panel),
+              truncated: title.scrollWidth > title.clientWidth + 1 }
+          : null;
+      })()`);
+      await tab.send('Emulation.clearDeviceMetricsOverride');
+      // And the viewport is back before anything else is read in it.
+      await until('the viewport to come back', async () =>
+        (await tab.eval('window.innerWidth')) === back ? true : null);
+      return out;
+    };
+
+    const phone = await drawn(390);
+    if (ok(phone, 'the head is drawn at 390px')) {
+      /* One row: the two boxes share vertical space rather than stacking. */
+      const shared = Math.min(phone.title.b, phone.btns.b) -
+                     Math.max(phone.title.t, phone.btns.t);
+      ok(shared > 0,
+         `the switch shares the heading's row (${Math.round(shared)}px of the two boxes overlap)`);
+      ok(phone.btns.r <= phone.panel.r + 0.5,
+         `and stays inside the panel (${Math.round(phone.btns.r)} against ${Math.round(phone.panel.r)})`);
+      ok(phone.truncated,
+         'the heading, given less room than its words need, ends in an ellipsis');
+    }
+
+    const wide = await drawn(1200);
+    if (ok(wide, 'the head is drawn at 1200px too')) {
+      ok(!wide.truncated, 'and on a wide one the whole heading is drawn');
+    }
   } finally {
     await tab.close();
     await browser.close();
@@ -2598,6 +2670,7 @@ try {
   await shuffleOrder(site);
   await autoplayRefused(site);
   await find(site);
+  await panelHeadOnAPhone();
   await albumsAtTheirAddresses(site);
   await albumsPlay(site);
   await reveal(site);
