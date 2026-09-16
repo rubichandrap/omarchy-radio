@@ -27,8 +27,8 @@
  *      internal href in every generated page is followed.
  *
  *   5. The album index and the album directories disagree. The build refuses
- *      either direction through parseAlbums(); this reads the same files off
- *      disk and holds the same rule up beside it.
+ *      either direction through parseAlbums(); this reads the same directories
+ *      off disk and holds the same rule up beside it.
  *
  * It serves dist/, so it tests what would be deployed. No dependencies.
  */
@@ -337,29 +337,35 @@ function slugRule() {
 }
 
 /* The album index and the directories are two facts that have to agree, and
-   both disagreements are silent: an album declared with no list is a
-   collection that plays nothing, and a directory holding a list nobody
-   declared is one that never plays at all. The build refuses both — this is
-   parseAlbums(), the same function, run over the pair on disk and then over a
-   pair that disagrees each way, because a rule that has never bitten is not a
-   rule. The lists are paired with the directory each was read out of, which
-   is what makes the two facts comparable at all. */
-function albumRule(index, lists) {
+   every disagreement is silent: an album declared with no list is one that
+   plays nothing, and a directory holding songs or a list that nobody declared
+   is one that never plays at all. parseAlbums() refuses them all — the build
+   runs it over the lists the bundler finds, this runs it over the directories
+   on disk, where a directory of audio with no list at all shows up too — and
+   then over a set that disagrees each way, because a rule that has never
+   bitten is not a rule. A directory is an album one when it holds a list or
+   any audio; `lyrics/` holds sheets, and is not. */
+function albumRule(index, dirs) {
   const declared = index.albums ?? [];
   for (const album of declared) {
-    ok(lists.some((l) => l.slug === album.slug),
-       `public/tracks/albums.json declares "${album.slug}", but public/tracks/${album.slug}/playlist.json is not there`);
+    const dir = dirs.find((d) => d.slug === album.slug);
+    if (!ok(dir, `public/tracks/albums.json declares "${album.slug}", but there is no public/tracks/${album.slug}/`)) continue;
+    ok(dir.list, `public/tracks/albums.json declares "${album.slug}", but public/tracks/${album.slug}/playlist.json is not there`);
   }
-  for (const { slug } of lists) {
+  for (const { slug } of dirs) {
     ok(declared.some((a) => a.slug === slug),
-       `public/tracks/${slug}/playlist.json is not declared in public/tracks/albums.json`);
+       `public/tracks/${slug}/ holds songs or a list, and public/tracks/albums.json does not declare it`);
   }
-  const refuses = (i, l) => { try { parseAlbums(i, l); return false; } catch { return true; } };
+  const refuses = (i, d) => { try { parseAlbums(i, d); return false; } catch { return true; } };
   ok(refuses({ albums: [{ slug: 'declared', name: 'Declared' }] }, []),
-     'an album declared with no list is refused');
-  ok(refuses({ albums: [] }, [{ slug: 'stray', data: { tracks: [] } }]),
+     'an album declared with no directory at all is refused');
+  ok(refuses({ albums: [{ slug: 'declared', name: 'Declared' }] }, [{ slug: 'declared' }]),
+     'an album declared with a directory but no list is refused');
+  ok(refuses({ albums: [] }, [{ slug: 'stray', list: { tracks: [] } }]),
      'a directory holding a list nobody declares is refused');
-  console.log(`  ${declared.length} albums declared, ${lists.length} on disk, in agreement`);
+  ok(refuses({ albums: [] }, [{ slug: 'stray' }]),
+     'a directory holding songs and no list at all is refused');
+  console.log(`  ${declared.length} albums declared, ${dirs.length} on disk, in agreement`);
 }
 
 /* ── the run ───────────────────────────────────────────────────────────── */
@@ -390,21 +396,23 @@ async function main() {
   }
 
   /* The index names the albums; each album's list and its audio sit in that
-     album's own directory. Both are read here the way the build reads them,
-     and the flattened list is the deck's own. */
+     album's own directory. Both are read here the way the build reads them —
+     a directory is an album one when it holds a list or any audio — and the
+     flattened list is the deck's own. */
   const trackRoot = join(ROOT, 'public/tracks');
   const index = JSON.parse(await readFile(join(trackRoot, 'albums.json'), 'utf8'));
-  const lists = [];
+  const dirs = [];
   for (const entry of await readdir(trackRoot, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
-    const list = join(trackRoot, entry.name, 'playlist.json');
-    if (existsSync(list)) {
-      lists.push({ slug: entry.name, data: JSON.parse(await readFile(list, 'utf8')) });
-    }
+    const inner = await readdir(join(trackRoot, entry.name));
+    const list = inner.includes('playlist.json')
+      ? JSON.parse(await readFile(join(trackRoot, entry.name, 'playlist.json'), 'utf8'))
+      : undefined;
+    if (list || inner.some((f) => f.endsWith('.mp3'))) dirs.push({ slug: entry.name, list });
   }
   let tracks = [];
   try {
-    tracks = parseAlbums(index, lists);
+    tracks = parseAlbums(index, dirs);
   } catch (e) {
     ok(false, `the build would refuse these files: ${e.message}`);
   }
@@ -436,7 +444,7 @@ async function main() {
   console.log(`  ${tracks.length} filenames, none of them needing an escape`);
 
   console.log('the album index and the directories agree');
-  albumRule(index, lists);
+  albumRule(index, dirs);
 
   console.log('every item has a page, and nothing else does');
   for (const kind of ['playlist', 'podcast']) {
@@ -564,7 +572,7 @@ async function main() {
     console.log('the shell the host needs');
     for (const path of ['/robots.txt', '/site.webmanifest', '/sw.js',
                         '/tracks/albums.json', '/stories/feed.rss',
-                        ...lists.map((l) => `/tracks/${l.slug}/playlist.json`)]) {
+                        ...dirs.filter((d) => d.list).map((d) => `/tracks/${d.slug}/playlist.json`)]) {
       const { status } = await get(path);
       ok(status === 200, `${path} answered ${status}`);
     }

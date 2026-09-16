@@ -34,10 +34,12 @@ export interface AlbumIndex {
   albums?: Album[];
 }
 
-/** One album's list, paired with the directory it came out of. */
-export interface AlbumList {
+/** One album's directory, as the build or the route test found it: the slug it
+    is named by, and its own list if there is one in it. A directory holding
+    songs and no list arrives here too, which is how that gets refused. */
+export interface AlbumDir {
   slug: string;
-  data: Manifest;
+  list?: Manifest;
 }
 
 /** A song before it has been given an address; assignSlugs() adds kind, slug
@@ -61,40 +63,46 @@ export function parseTracks(data: Manifest, album: string): TrackEntry[] {
     }));
 }
 
-/** Every song, out of the index and the albums' own lists.
+/** Every song, out of the index and the albums' own directories.
  *
- * The lists arrive paired with the directory each was read out of — the build
- * finds them through the bundler, the route test off disk — and the two
- * facts have to agree: an album the index declares with no list is a
- * collection that plays nothing, and a directory holding a list nobody
- * declared is one that never plays at all. Either one is an error rather than
- * a playlist quietly missing a collection.
+ * The directories arrive as they were found — the build finds them through
+ * the bundler, the route test off disk — and the two facts have to agree: an
+ * album the index declares with no list is one that plays nothing,
+ * a directory holding songs or a list that nobody declared is one that never
+ * plays at all. Either one is an error rather than a playlist quietly
+ * missing an album.
  *
  * One flat list, the albums in index order and each album's songs in its own
  * order, with the slugs assigned once over the lot — so a song's key and its
  * permalink do not depend on which album it is in.
  */
-export function parseAlbums(index: AlbumIndex, lists: AlbumList[]): Item[] {
+export function parseAlbums(index: AlbumIndex, dirs: AlbumDir[]): Item[] {
   const albums = index.albums ?? [];
   const flat: TrackEntry[] = [];
 
   for (const album of albums) {
-    const list = lists.find((l) => l.slug === album.slug);
-    if (!list) {
+    const dir = dirs.find((d) => d.slug === album.slug);
+    if (!dir) {
+      throw new Error(
+        `public/tracks/albums.json declares the album "${album.slug}", but ` +
+        `public/tracks/${album.slug}/ is not there.`,
+      );
+    }
+    if (!dir.list) {
       throw new Error(
         `public/tracks/albums.json declares the album "${album.slug}", but ` +
         `public/tracks/${album.slug}/playlist.json is not there.`,
       );
     }
-    flat.push(...parseTracks(list.data, album.slug));
+    flat.push(...parseTracks(dir.list, album.slug));
   }
 
-  for (const { slug } of lists) {
+  for (const { slug } of dirs) {
     if (!albums.some((a) => a.slug === slug)) {
       throw new Error(
-        `public/tracks/${slug}/playlist.json is not declared in ` +
-        'public/tracks/albums.json. Add it to the index, or take the ' +
-        'directory out.',
+        `public/tracks/${slug}/ holds songs or a list, and ` +
+        'public/tracks/albums.json does not declare it. Add it to the index, ' +
+        'or take the directory out.',
       );
     }
   }
