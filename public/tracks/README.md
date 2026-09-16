@@ -42,10 +42,11 @@ tracks/
 
 An album is a directory and a line. To add one, make the directory, write its
 `playlist.json`, and add `{ "slug": "...", "name": "..." }` to `albums.json`
-where you want it in the list — `slug` is the directory's name, `name` is what
-the deck calls it. Nothing else declares it, and nothing checks it later: a
-directory nobody declared, or a declared album with no `playlist.json`, fails
-the build rather than playing nothing.
+where you want it in the list — `slug` is the directory's name and `name` is
+the album's. Nothing else declares it. The index and the directories are held
+to each other: a directory holding songs or a list that no line declares, a
+line with no `playlist.json` behind it, or a line with no directory at all,
+each is refused rather than playing nothing.
 
 ## Fields
 

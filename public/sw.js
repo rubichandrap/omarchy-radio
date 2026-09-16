@@ -42,8 +42,9 @@ var ASSETS = [
   BASE + '/assets/images/icon-512.png',
   BASE + '/assets/images/apple-touch-icon.png',
   BASE + '/tracks/albums.json',
-  /* Every album's own list, beside its audio. The audio never goes in the
-     cache, but the rows come out of here with no network. */
+  /* One line per album: an album's list joins this list when the album does,
+     and VERSION moves with it, or a cold offline visit has no rows for it.
+     The audio never goes in the cache; only the rows. */
   BASE + '/tracks/omarchy/playlist.json',
   BASE + '/stories/feed.rss'
 ];

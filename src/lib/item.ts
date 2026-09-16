@@ -24,8 +24,8 @@ export interface Item extends Addressed {
   /** The MP3's name in the album's own directory. The deck rebuilds url
       from it, and from the album. */
   file?: string;
-  /** The album the song is in — the directory its audio and its list sit
-      in, and what a collection is named by. */
+  /** The album the song is in: the directory its audio and its list sit
+      in. */
   album?: string;
   /** false, or the name of a sheet that does not match the MP3's. */
   lyrics?: boolean | string;

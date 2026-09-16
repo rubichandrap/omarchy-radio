@@ -1600,7 +1600,7 @@ function listSettled() {
    is fetched in parallel, merged into the one flat list the deck has always
    held. One album failing to arrive fails the load as a whole: the copy kept
    from the last visit stands and the attempt repeats on the next visit,
-   rather than a playlist quietly missing a collection. */
+   rather than a playlist quietly missing an album. */
 function fetchAlbums(): Promise<Manifest> {
   return fetch(TRACKS_INDEX).then(function (r) {
     if (!r.ok) throw new Error('no albums');

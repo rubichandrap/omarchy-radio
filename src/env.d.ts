@@ -7,8 +7,8 @@ declare module '*?raw' {
 }
 
 /* Vite's import.meta.glob, for the album lists the build enumerates rather
-   than naming one by one: a new collection is a directory and a line in the
-   index, and a directory the index does not declare stops the build. */
+   than naming one by one: a new album is a directory and a line in the index,
+   and a directory the index does not declare stops the build. */
 declare interface ImportMeta {
   glob<T = unknown>(
     pattern: string,
