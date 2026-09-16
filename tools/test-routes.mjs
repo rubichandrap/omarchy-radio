@@ -266,14 +266,14 @@ function foldRule() {
 const GLYPHS = new Set('\u25b6\u25c0\u25a0\u2759\u25bc\u25b2\u25be\u25b8\u2197');
 
 /* The icons: every name the deck asks the page for, and the size its context
-   calls for — 20px on the six buttons, 12px on the ones that sit in a line of
+   calls for — 18px on the six buttons, 12px on the ones that sit in a line of
    text. They are Lucide's drawings, rendered by the build into the page
    (src/components/Icon.astro), so what there is to check is the markup: an
    inline svg per name, stroked in currentColor, decorative, with Lucide's
    shapes in it and no lattice cells. */
 const ICON_SIZES = {
-  play: 20, pause: 20, stop: 20, prev: 20, next: 20, shuffle: 20, repeat: 20,
-  'repeat-off': 20, 'repeat-one': 20,
+  play: 18, pause: 18, stop: 18, prev: 18, next: 18, shuffle: 18, repeat: 18,
+  'repeat-off': 18, 'repeat-one': 18,
   note: 12, mic: 12, 'caret-down': 12, 'caret-up': 12, 'caret-right': 12,
   'arrow-ne': 12,
 };

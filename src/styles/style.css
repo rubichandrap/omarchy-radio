@@ -558,11 +558,6 @@ a, button, [role="slider"] { -webkit-tap-highlight-color: transparent; }
   color: var(--acFg);
 }
 
-.tb-play {
-  width: 74px;
-  font-size: 13px;
-}
-
 .seek {
   flex: 1;
   min-width: 160px;
@@ -1139,7 +1134,6 @@ a, button, [role="slider"] { -webkit-tap-highlight-color: transparent; }
      the left with the rest of the row empty. */
   .tbtns { width: 100%; }
   .tb { height: 40px; width: auto; flex: 1; }
-  .tb-play { flex: 1.6; }
 
   .seek { height: 44px; }
 

@@ -7,10 +7,10 @@
  * inline, in currentColor, so an icon takes the colour it sits in and there
  * is no icon font and no second request. Nothing here is drawn by hand, and a
  * name that is not in the table fails the build — `astro check` where the
- * name is a literal, and the lookup below for anything it cannot see — rather
- * than rendering an empty box.
+ * name is a literal, and the render itself for anything it cannot see, where
+ * the drawing comes back undefined rather than an empty box.
  *
- * Two sizes: 20px on the six buttons, so none of them weighs more than
+ * Two sizes: 18px on the six buttons, so none of them weighs more than
  * another, and 12px on the ones that sit in a line of text — the two list
  * glyphs, the carets, and the arrow that says a link leaves the site.
  *
@@ -30,7 +30,7 @@ import {
   Mic, Music2, Pause, Play, Repeat, Repeat1, RepeatOff, Rewind, Shuffle, Square,
 } from '@lucide/astro';
 
-const CONTROL = 20;
+const CONTROL = 18;
 const INLINE = 12;
 
 const ICONS = {

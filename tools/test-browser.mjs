@@ -847,6 +847,8 @@ async function controlGroups() {
          'and all six buttons sit on one row');
       is(Math.round(b['#shuffle'].w), Math.round(b['#prev'].w),
          'a mode control is the width of a transport button');
+      ok(BUTTONS.every((sel) => Math.round(b[sel].w) === Math.round(b['#prev'].w)),
+         'and the six buttons are one width, the play button included');
     }
 
     /* The pointer, put on a control and taken off it again. What a hovered
@@ -946,6 +948,8 @@ async function controlGroups() {
       const n = await row();
       ok(BUTTONS.every((sel) => Math.round(n[sel].top) === Math.round(n['#prev'].top)),
          'the two strips stay on one row');
+      ok(BUTTONS.every((sel) => Math.round(n[sel].w) === Math.round(n['#prev'].w)),
+         'and one width each, the play button included');
       is(gap('#next', '#shuffle', n), 8, 'and keep their 8px between them');
       const strip = await box('.tbtns');
       ok(Math.round(n['#prev'].left) === Math.round(strip.left) &&
@@ -1721,7 +1725,7 @@ async function icons({ songs, eps }) {
       if (!ok(shown.length === 1, `${sel} shows one icon, not ${shown.length}`)) continue;
       const i = shown[0];
       ok(has(i, name), `${sel} is ${name}, not ${i.cls.split(' ').join(' ')}`);
-      is(size(i), '20x20', `${sel}'s icon is 20px on the button`);
+      is(size(i), '18x18', `${sel}'s icon is 18px on the button`);
       ok(i.fill === 'none' && i.stroke === 'currentColor',
          `${sel}'s icon is a stroke in the button's colour (fill ${i.fill}, stroke ${i.stroke})`);
       ok(!i.crisp && i.drawn > 0, `${sel}'s icon is drawn, not a lattice cell`);
