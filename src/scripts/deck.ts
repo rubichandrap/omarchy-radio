@@ -21,7 +21,7 @@ import {
 } from '../lib/site.ts';
 import { assignSlugs, fold } from '../lib/slug.ts';
 import { dateLabel, fmt, hms, lengthLabel, plural } from '../lib/format.ts';
-import { songNumbers } from '../lib/rows.ts';
+import { panelTitle, songNumbers } from '../lib/rows.ts';
 import { SKINS, derive, type Skin, type Theme } from './theme.ts';
 import { DESKTOP, desktopName, watchDesktop } from './omarchy-theme.ts';
 import type { Item, Stamped } from '../lib/item.ts';
@@ -2249,11 +2249,13 @@ function paintTabs() {
   // the one being read is the current page rather than a button held down.
   setCurrent(el.tabSongs, !stories);
   setCurrent(el.tabPodcast, stories);
-  el.playlistKind.textContent = stories ? 'episodes' : 'playlist';
+  /* The heading over the list is one rule, written once: the build wrote this
+     span through panelTitle(), and the deck repaints exactly what it wrote. */
   var up = albumNamed(S.album);
-  el.playlistName.textContent = stories
-    ? showName().toLowerCase()
-    : (up ? up.name.toLowerCase() : STATION.name.toLowerCase());
+  var title = panelTitle(stories ? 'podcast' : 'playlist',
+    { name: showName(), home: showLink(), episodes: [] }, up ? up.name : '');
+  el.playlistKind.textContent = title.kind;
+  el.playlistName.textContent = title.name;
   el.tracks.setAttribute('aria-label', stories ? 'Episodes' : 'Playlist');
   paintAlbums();
 }
