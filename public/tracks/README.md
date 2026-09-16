@@ -11,8 +11,9 @@ the end.
 
 ## Add a track
 
-1. Drop your MP3 in the album's directory, named `artist-title.mp3` — lower
-   case, words joined by hyphens, nothing in it but `a-z`, `0-9` and `-`.
+1. Drop your MP3 in the album's directory, named `artist-title.mp3` — or
+   `title.mp3` for a song with no artist. Lower case, words joined by hyphens,
+   nothing in it but `a-z`, `0-9` and `-`.
 2. Add an entry to that album's `playlist.json`.
 3. Open a pull request.
 
@@ -30,9 +31,9 @@ when the pull request lands, along with its card and its sitemap entry.
 
 ## Albums
 
-The community's songs are the `omarchy` album. The `lofi` album is a
-collection from elsewhere — the [Open Lo-Fi](../README.md) release, whose
-tracks carry no artist. The folders look like this:
+The community's songs are the `omarchy` album. The `lofi` album is the
+[Open Lo-Fi](../README.md) release — songs from somewhere else, none of them
+with an artist. The folders look like this:
 
 ```
 tracks/
@@ -41,7 +42,7 @@ tracks/
     playlist.json     the community's songs, in the order they play
     dan-t-play-the-machine.mp3
   lofi/
-    playlist.json     the collection's tracks, in the order they play
+    playlist.json     the album's tracks, in the order they play
     2-am-debug-loop.mp3
 ```
 

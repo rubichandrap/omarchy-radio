@@ -1614,10 +1614,10 @@ function fetchAlbums(): Promise<Manifest> {
         return r.json() as Promise<Manifest>;
       }).then(function (list) {
         // Each song is stamped with the album it came out of: the directory
-        // its audio and its list live in. An entry with no artist gets the
-        // empty one, which is what the row and the marquee read as "none":
-        // the file is the only place the shape of a song lives, so the
-        // missing key is filled here rather than at every reader of it.
+        // its audio and its list live in. An entry with no artist is given
+        // the empty one, so nothing downstream has to tell a missing key
+        // from an absent artist; whether a second line is drawn is still
+        // each surface's own call.
         return (list.tracks || []).map(function (t) {
           return resolveTrack(Object.assign({}, t, {
             artist: t.artist || '',

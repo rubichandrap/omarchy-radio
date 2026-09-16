@@ -109,7 +109,7 @@ Tracks in this repository follow the Omarchy community guidelines:
 
 ---
 
-## Lo-Fi Collection
+## Open Lo-Fi
 
 The `lofi` album is [Open Lo-Fi](https://github.com/btahir/open-lofi): 166
 instrumentals released into the public domain under CC0-1.0. The copies in this

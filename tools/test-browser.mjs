@@ -568,7 +568,7 @@ async function reveal({ songs }) {
   }
 }
 
-/* A song with no artist, which is what the lo-fi collection is made of: the
+/* A song with no artist, which is what the lo-fi album is made of: the
    row is the title alone and the marquee joins the two only when there are
    two. Joined against a missing artist, both leave the separator hanging off
    the end — the row an empty line, the readout a dash and nothing. */
