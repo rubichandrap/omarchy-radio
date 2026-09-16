@@ -112,6 +112,10 @@ interface State {
   /** The album the songs panel is showing, by slug, and '' for all of them:
       what the address names and what the selector marks. */
   album: string;
+  /** The album whose songs the deck walks — the list a play seated it into,
+      as against the album above, which is only what the panel shows. '' is
+      the whole playlist. */
+  playingAlbum: string;
   /** Every album the index declares, in its order — the selector's links and
       the words the router knows an album's address by. */
   albums: Album[];
@@ -151,6 +155,7 @@ var S: State = {
   tab: 'songs',
   route: '',
   album: '',
+  playingAlbum: '',
   albums: [],
   epOpen: true,
   feedErr: false,
@@ -779,29 +784,43 @@ function wireGraph() {
 }
 
 /* The songs the deck plays and the panel shows: one album's, or the whole
-   playlist. An album is a scope over the songs list, and the list the deck
-   walks is whichever is in view — the whole playlist while no album is
-   chosen, that album's songs otherwise.
+   playlist. An album is a scope over the songs list, and two of them stand
+   at once — the album the panel is showing, and the album whose songs the
+   deck walks. They part company the moment a look moves the panel: what
+   plays goes on playing, and goes on being walked by the list a play seated
+   it into.
 
    Held rather than filtered per call, because the play order is compared to
    the list it was drawn from by reference: a fresh array every call would
    make every paint look stale and draw the order again. */
-var scope: Item[] = [];
-var scopeOf: { album: string; tracks: Item[] } | null = null;
 
-function songScope(): Item[] {
-  if (!S.album) return S.tracks;
-  if (!scopeOf || scopeOf.album !== S.album || scopeOf.tracks !== S.tracks) {
-    scope = S.tracks.filter(function (t) { return t.album === S.album; });
-    scopeOf = { album: S.album, tracks: S.tracks };
+/** One album's songs, held: the album it was filtered for, and the flat list
+    it came out of, so a reload of the manifest is known to have replaced it. */
+interface Scoped { album: string; tracks: Item[]; list: Item[] }
+
+function albumScope(album: string, held: Scoped): Item[] {
+  if (!album) return S.tracks;
+  if (held.album !== album || held.tracks !== S.tracks) {
+    held.list = S.tracks.filter(function (t) { return t.album === album; });
+    held.album = album;
+    held.tracks = S.tracks;
   }
-  return scope;
+  return held.list;
 }
 
+/** The album the panel shows, and the whole playlist while none is up. */
+var viewHeld: Scoped = { album: '', tracks: [], list: [] };
+function songScope(): Item[] { return albumScope(S.album, viewHeld); }
+
+/** The album the deck walks, and the whole playlist while none is seated. */
+var walkHeld: Scoped = { album: '', tracks: [], list: [] };
+function playingScope(): Item[] { return albumScope(S.playingAlbum, walkHeld); }
+
 // The list the mode names: the episodes while a story plays, and the songs —
-// the album in view, or the whole playlist — while a track does.
+// the album a play seated the deck in, or the whole playlist — while a track
+// does. Not the album in view: a look does not re-seat the deck.
 function playingList(): Item[] {
-  return S.mode === 'story' ? S.eps : songScope();
+  return S.mode === 'story' ? S.eps : playingScope();
 }
 
 function onScreenList(): Item[] { return S.tab === 'stories' ? S.eps : songScope(); }
@@ -1024,11 +1043,9 @@ function step(d: number): number {
 /* The end of a cycle: the order is drawn again, the deck stands at its head,
    and the one item the head may not be is the item that has just played — a
    reshuffle that opens on the song that ended the last cycle is not a
-   reshuffle. `heard` is for the caller that has just changed the list under
-   the deck — an album picked from the outside — and can say what played
-   where the order it holds cannot. */
-function newCycle(l: Item[], heard?: string): number {
-  var last = heard !== undefined ? heard : keyOf(l[order[pos]!]);
+   reshuffle. */
+function newCycle(l: Item[]): number {
+  var last = keyOf(l[order[pos]!]);
   var drawn = shuffled(ownOrder(l));
   if (last && drawn.length > 1 && keyOf(l[drawn[0]!]) === last) {
     var j = 1 + Math.floor(Math.random() * (drawn.length - 1));
@@ -1103,11 +1120,12 @@ function endOfOrder() {
   standAtHead(playingList());
   S.playing = false;
   S.cur = 0;
-  /* Named for the list that ended: an episode running out is not the songs
-     playlist running out, and an album running out is not the playlist
-     running out either. CONTEXT.md keeps the words apart. */
+  /* Named for the list that ended — the one that plays, not the one on
+     screen: an episode running out is not the songs playlist running out,
+     and the album the deck walks running out is not the playlist running out
+     either. CONTEXT.md keeps the words apart. */
   setStatus(S.mode === 'story' ? 'the episodes have ended'
-    : S.album ? 'the album has ended'
+    : S.playingAlbum ? 'the album has ended'
     : 'the playlist has ended');
   paintAll();
   syncRoute('replace');
@@ -1179,12 +1197,17 @@ function play(src: string, mode: Mode, ti: number) {
    page the listener opened stays the page they are on, and a permalink
    goes on meaning a song somebody picked. */
 function autostart(how?: How) {
-  /* The list that plays, so arriving at an album's address starts the album
-     the way arriving at the deck starts the playlist. */
-  var l = songScope();
+  /* What starts is what the deck is showing: an album's address starts that
+     album the way the front page starts the whole playlist. This is also the
+     deck's first start — nothing has played yet — so the list played is the
+     one it is seated into. */
+  S.playingAlbum = S.album;
+  var l = playingScope();
   if (!l.length) { setStatus('nothing in the playlist'); return; }
   chose = false;
-  playFrom(l, 'track', 0, how);
+  /* With shuffle on, an album is entered somewhere inside it: a cycle is
+     drawn over it, and its head is what plays. */
+  playFrom(l, 'track', S.shuffle ? newCycle(l) : 0, how);
 }
 
 function playFrom(list: Item[], mode: Mode, i: number, how?: How) {
@@ -1200,17 +1223,19 @@ function playFrom(list: Item[], mode: Mode, i: number, how?: How) {
 // The two ways in that mean the listener named this one: a row, or a link.
 // Stepping with the transport goes through playFrom() and leaves that be.
 //
-// The song plays where it is: in the album in view when one is up, which is
-// what makes a row pressed in an album walk that album, and in the whole
-// playlist otherwise. The index names the flat list either way, so the song
-// is found in the list that plays by its key.
+// The song plays out of the list on screen: the album when one is up, the
+// whole playlist otherwise. Pressing it seats the deck in that list, which
+// is what makes a row pressed in an album walk that album from there on. The
+// index names the flat list either way, so the song is found in the list
+// that now plays by its key.
 function playTrack(i: number, how?: How) {
   var it = S.tracks[i];
   if (!it) return;
   chose = true;
   S.tab = 'songs';
   S.route = 'playlist';
-  var l = songScope();
+  S.playingAlbum = S.album;
+  var l = playingScope();
   var at = indexOfKey(l, it.key);
   if (at < 0) return; // not in the album in view: there is no such place
   playFrom(l, 'track', at, how);
@@ -1710,8 +1735,8 @@ function loadTracks() {
   fetchAlbums().then(function (j) {
     /* What tuneIn() started, if anything, named by the one thing that
        survives a reordering — and out of the list that plays, which is the
-       album in view when one is, rather than the flat list the manifest is
-       about to rebuild. */
+       album the deck walks when one is, rather than the flat list the
+       manifest is about to rebuild. */
     var l = playingList();
     var open = S.mode === 'track' && l[S.ti] ? l[S.ti]!.key : '';
     /* And the cycle it is walking, read now, while the indices still name
@@ -2057,44 +2082,15 @@ function paintCanonical() {
   link.setAttribute('href', CANON + showingRel());
 }
 
-/* Picking an album is a command as much as a place, and what it does depends
-   on what is playing. An item inside the new album means nothing is
-   interrupted and the order is simply drawn around it. An item outside it
-   means the album starts there and then: its first track with shuffle off,
-   and with shuffle on the head of a freshly drawn cycle, which is the deck's
-   own new-cycle path and not a special case. A deck that is paused, stopped
-   or never started has nothing to replace, so nothing starts: it is put at
-   the head of the album it now plays and stays quiet.
-
-   `was` is the key of the item the deck stood on before the album changed,
-   read by the caller while the list that held it still stood. */
-function pickAlbum(was: string, live: boolean, how?: How) {
-  var l = songScope();
-  if (!l.length) return;
-  var at = was ? indexOfKey(l, was) : -1;
-  if (at >= 0) { anchor(l, at); return; }
-  if (live) { playFrom(l, 'track', S.shuffle ? newCycle(l, was) : 0, how); return; }
-  if (S.ti >= 0) standAtHead(l);
-}
-
 /* Leaving an album — for the whole playlist, for home, for an address that
-   names nothing: the songs show whole again, and the deck's place is said
-   again in the flat list — the item it stood on when that list carries it,
-   the head otherwise. Nothing is started: a change of scope is a place, and
-   a place is not a press. Returns whether there was an album to leave, which
-   is what the callers repaint on.
-
-   pickAlbum() is the other direction: a scope entered rather than left. */
+   names nothing: the songs show whole again. A look does not re-seat the
+   deck: what plays goes on playing, and goes on being walked by the list its
+   playback was seated into — an album, until a play seats something else.
+   Returns whether there was an album to leave, which is what the callers
+   repaint on. */
 function leaveScope(): boolean {
   if (!S.album) return false;
-  var before = keyOf(nowItem());
   S.album = '';
-  if (S.mode === 'track' && S.ti >= 0) {
-    var l = playingList();
-    var at = before ? indexOfKey(l, before) : -1;
-    if (at >= 0) anchor(l, at);
-    else standAtHead(l);
-  }
   return true;
 }
 
@@ -2109,8 +2105,8 @@ function navigate(r: Route, how?: How): boolean {
   if (!r.kind) {
     /* Home is the front of the deck: the whole playlist. Whatever is already
        playing keeps playing — going back to the front is not a reason to
-       lose your place in a song — and the order is drawn around it in the
-       list that now plays. */
+       lose your place in a song — and the list it walks stays the one its
+       playback was seated into. */
     S.route = '';
     var hadAlbum = leaveScope();
     chose = false;
@@ -2123,33 +2119,28 @@ function navigate(r: Route, how?: How): boolean {
 
   var spec = LISTS[r.kind as Kind];
 
-  /* An album's address: the album is what plays, and picking it is also a
-     command — pickAlbum() says what that does to the sound. The address
-     names no song, so the deck stops calling the page one, and the readout
-     goes back to saying where it is. */
+  /* An album's address is the album in view: the rows, the address, the
+     numbering and the note become its own. It names no song, so the deck
+     stops calling the page one; and it is a look, so nothing about the sound
+     changes — what plays goes on playing, and goes on being walked by the
+     list its playback was seated into. */
   if (r.album) {
-    /* Read before the album changes, while the list that holds it still
-       stands: the deck's place is a key, and indices do not survive the
-       swap. */
-    var wasAlbum = keyOf(nowItem());
-    var live = !!audio && !audio.paused;
     S.album = r.album;
     S.route = 'playlist';
     chose = false;
     revealKey = '';
     setTab('songs');
     el.tracks.scrollTop = 0;
-    pickAlbum(wasAlbum, live, how);
     paintAll();
     syncRoute(how);
     return true;
   }
 
   /* The list itself: every song, or every episode. For the songs, `all` is a
-     choice of scope like any album: the whole playlist is what plays — a
-     song is in it wherever in an album it sits — and the order is drawn
-     around whatever is playing. The episodes leave the album in view alone,
-     which is what brings it back when the songs come back. */
+     look like any album — the whole playlist goes on screen, and nothing
+     about the sound changes — until a row is pressed, which plays out of the
+     whole playlist and seats the deck in it. The episodes leave the album in
+     view alone, which is what brings it back when the songs come back. */
   if (!r.slug) {
     var hadScope = r.kind === 'playlist' ? leaveScope() : false;
     showTab(spec.tab, how);
@@ -2456,9 +2447,9 @@ function paintTracks() {
       if (opens) toggleEpisode();
       else if (stories) playStory(i, 'push');
       /* The row was walked out of the list on screen — the album's when one
-         is up, the whole playlist otherwise — and that list is the one that
-         plays. playTrack() takes indices into the flat list and finds the
-         song in the list that plays by its key. */
+         is up, the whole playlist otherwise — and pressing it plays out of
+         that list and seats the deck in it. playTrack() takes indices into
+         the flat list and finds the song in the list that plays by its key. */
       else playTrack(indexOfKey(S.tracks, tr.key), 'push');
     });
 
