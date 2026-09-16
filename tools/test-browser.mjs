@@ -30,6 +30,8 @@
      - the last track runs into the first one
      - the repeat modes: `one` plays a finished item again from the top, `off`
        stops at the end of the play order and the next play starts from its head
+     - the repeat button's faces: one per mode, flipped with the mode, and the
+       mode's own face after a reload
      - the shuffle order: a permutation of the list walked one row at a time,
        a new cycle opened on a different row, and the deck it survives
      - the icons: Lucide drawings inline in the page, one size on the six
@@ -686,6 +688,83 @@ async function repeatModes({ songs }) {
       is(s.status.trim(), 'repeat all', 'R cycles the mode from anywhere on the deck');
       ok(/, on repeat$/.test(s.note.trim()), 'and the note follows the mode');
     }
+  } finally {
+    await tab.close();
+    await browser.close();
+  }
+}
+
+/* The repeat button's faces, one per mode. `all` is the face the page lands
+   in and the one the button wears until the deck says otherwise; `off` and
+   `one` are the modes the deck flips a class for. So what is checked is which
+   of the three faces the browser is showing, and that the pressing state and
+   the accessible name belong to the same mode the face does. The icon probe
+   is the icons section's, further down. */
+async function repeatFaces() {
+  section('the repeat button\'s three faces');
+  const browser = await Browser.launch('no-user-gesture-required');
+  const tab = await browser.tab();
+  try {
+    // The probe goes with the document it was installed in.
+    const go = async (path) => { await tab.go(path); await tab.eval(ICON_PROBE); };
+    const face = async () => (await tab.eval('window.__icon("#repeat")') || [])
+      .filter((i) => i.shown);
+    const wears = async (name) => {
+      const f = await face();
+      return f.length === 1 && has(f[0], name);
+    };
+
+    await go('/playlist');
+    let s = await until('the deck to own the playlist', async () => {
+      const st = await tab.state();
+      return st.playing && st.at > 0 ? st : null;
+    });
+    if (!s) return;
+
+    const faces = await tab.eval('window.__icon("#repeat")');
+    is(faces.length, 3, 'the button carries a face for each of its three modes');
+    ok(await wears('lucide-repeat'), 'the deck arrives in all, wearing the repeat face');
+
+    // ── one: the face is the mode, not a colour ──
+    await tab.click('#repeat');
+    s = await until('the mode to become one', async () => {
+      const st = await tab.state();
+      return st.repeat.label === 'Repeat mode: one' ? st : null;
+    });
+    if (s) {
+      ok(await wears('lucide-repeat-1'), 'one wears the repeat-1 face');
+      is(s.repeat.pressed, 'true', 'and the button says the mode is on');
+    }
+
+    // ── off: the face says the cycle will not come round again ──
+    await tab.click('#repeat');
+    s = await until('the mode to become off', async () => {
+      const st = await tab.state();
+      return st.repeat.label === 'Repeat mode: off' ? st : null;
+    });
+    if (s) {
+      ok(await wears('lucide-repeat-off'), 'off wears the repeat-off face');
+      is(s.repeat.pressed, 'false', 'and the button says the mode is off');
+    }
+
+    /* A reload is where the kept mode is read: the face has to be the one the
+       mode the deck comes up in belongs to, not the one the last press left
+       behind. */
+    await go('/playlist');
+    s = await until('the kept mode to come back', async () => {
+      const st = await tab.state();
+      return st.repeat.label === 'Repeat mode: off' ? st : null;
+    });
+    if (s) ok(await wears('lucide-repeat-off'), 'a reload comes up on the off face');
+
+    // ── R walks the ring the button walks, and the face follows it ──
+    await tab.eval(`document.body.dispatchEvent(new KeyboardEvent('keydown',
+      { key: 'r', code: 'KeyR', bubbles: true, cancelable: true }))`);
+    s = await until('R to cycle the mode', async () => {
+      const st = await tab.state();
+      return st.repeat.label === 'Repeat mode: all' ? st : null;
+    });
+    if (s) ok(await wears('lucide-repeat'), 'R cycles to all, and the repeat face is back');
   } finally {
     await tab.close();
     await browser.close();
@@ -1514,6 +1593,7 @@ try {
   console.log(`${site.songs.length} songs, ${site.eps.length} episodes`);
   await autoplayAllowed(site);
   await repeatModes(site);
+  await repeatFaces();
   await shuffleOrder(site);
   await autoplayRefused(site);
   await find(site);

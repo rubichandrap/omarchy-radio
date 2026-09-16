@@ -562,11 +562,15 @@ line of text. One package is the only source — nothing vendored, no icon font
 or sprite in the load — and a name with no mapping fails the build rather than
 rendering an empty box.
 
+The repeat button is the one control that wears a face per mode — Lucide's
+`repeat-off`, `repeat`, and `repeat-1`, one for each of its three — so the
+mode is seen rather than remembered.
+
 The deck draws nothing at all. The one icon it needs at runtime — the caret on
 an episode's row, because the deck builds that row — is markup the build
 rendered into the panel (`#rowCaret`) and the deck copies in, the way the build
 and the browser share the slug rule. Both faces are in the markup and the row's
-class decides which shows, the same trade the two-state buttons make.
+class decides which shows, the same trade the play button's faces make.
 
 Two consequences. The icons are curves with round joins now, so the lattice's
 argument — the one kind of icon that cannot go blurry — goes with the table,

@@ -273,7 +273,7 @@ const GLYPHS = new Set('\u25b6\u25c0\u25a0\u2759\u25bc\u25b2\u25be\u25b8\u2197')
    shapes in it and no lattice cells. */
 const ICON_SIZES = {
   play: 20, pause: 20, stop: 20, prev: 20, next: 20, shuffle: 20, repeat: 20,
-  'repeat-one': 20,
+  'repeat-off': 20, 'repeat-one': 20,
   note: 12, mic: 12, 'caret-down': 12, 'caret-up': 12, 'caret-right': 12,
   'arrow-ne': 12,
 };

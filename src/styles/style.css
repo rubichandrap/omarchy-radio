@@ -80,22 +80,27 @@ a { color: var(--ac); text-decoration: none; }
   margin-left: 2px;
 }
 
-/* Both faces of a two-state icon are in the page and one is shown: a class
-   is cheaper than rewriting a button forty times a minute, and it keeps the
+/* Every face an icon can wear is in the page and one is shown: a class is
+   cheaper than rewriting a button forty times a minute, and it keeps the
    drawing out of the deck. The showing rules are the more specific ones, so
-   they win without an !important or an ordering trick. The row caret is the
-   one the deck fills in itself — both faces copied out of #rowCaret — and it
-   flips the same way. */
+   they win without an !important or an ordering trick. The repeat button has
+   three faces, one per mode: `repeat` is the face of the mode the page lands
+   in, and `is-off` and `is-one` — the classes the deck flips — put the other
+   two up. The row caret is the one the deck fills in itself — both faces
+   copied out of #rowCaret — and it flips the same way. */
 .tb-play .i-pause,
 .tb-repeat .i-repeat-one,
+.tb-repeat .i-repeat-off,
 .caret .i-caret-up,
 .tr-c .i-caret-down,
 .tr-c.is-open .i-caret-right,
 .tb-play.is-playing .i-play,
+.tb-repeat.is-off .i-repeat,
 .tb-repeat.is-one .i-repeat,
 .caret.is-open .i-caret-down { display: none; }
 
 .tb-play.is-playing .i-pause,
+.tb-repeat.is-off .i-repeat-off,
 .tb-repeat.is-one .i-repeat-one,
 .caret.is-open .i-caret-up,
 .tr-c.is-open .i-caret-down { display: block; }
@@ -522,10 +527,10 @@ a, button, [role="slider"] { -webkit-tap-highlight-color: transparent; }
 .tb:first-child { margin-left: 0; }
 .tb:hover { border-color: var(--ac); color: var(--ac); z-index: 1; }
 
-/* The repeat button has three modes and two faces, so the face cannot carry
-   all of it: the accent says the cycle will come round again, and the
-   accessible name says which of the repeating ones it is. It sits after the
-   hover rule so that a pressed button stays lit through a hover. */
+/* The repeat button's face says which mode it is in; the accent says the
+   cycle comes round again at all, which is why off is the one mode that sits
+   plain. The mode is on the accessible name too. It sits after the hover rule
+   so that a pressed button stays lit through a hover. */
 .tb-repeat[aria-pressed="true"] { color: var(--ac); }
 
 /* The shuffle button is one state deep, and its face carries none of it: the

@@ -1734,9 +1734,10 @@ function paintTransport() {
      the accessible name for everything else. */
   el.shuffle.setAttribute('aria-pressed', S.shuffle ? 'true' : 'false');
   el.shuffle.setAttribute('aria-label', 'Shuffle: ' + (S.shuffle ? 'on' : 'off'));
-  /* The repeat button: which face it wears, whether the mode is on at all,
-     and which of the three it is. Two of the three share a face, so the
-     accessible name is where that difference lives. */
+  /* The repeat button: a face per mode, so the class it wears is the mode —
+     `is-off` and `is-one` are the two the page does not land in — and the
+     mode is on the accessible name as well as on the face. */
+  el.repeat.classList.toggle('is-off', S.repeat === 'off');
   el.repeat.classList.toggle('is-one', S.repeat === 'one');
   el.repeat.setAttribute('aria-pressed', S.repeat === 'off' ? 'false' : 'true');
   el.repeat.setAttribute('aria-label', 'Repeat mode: ' + S.repeat);

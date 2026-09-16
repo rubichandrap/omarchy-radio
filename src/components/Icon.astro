@@ -21,13 +21,13 @@
  *
  * What is rendered carries the deck's own name for the icon (`i i-play`)
  * beside Lucide's two (`lucide lucide-play`): the deck's names are what the
- * stylesheet flips when a button has two faces, and what the tests look for.
- * Nothing here passes Lucide a name to read out, so it marks the svg
- * aria-hidden on its own.
+ * stylesheet flips when a button has more than one face, and what the tests
+ * look for. Nothing here passes Lucide a name to read out, so it marks the
+ * svg aria-hidden on its own.
  */
 import {
   ArrowUpRight, ChevronDown, ChevronRight, ChevronUp, FastForward,
-  Mic, Music2, Pause, Play, Repeat, Repeat1, Rewind, Shuffle, Square,
+  Mic, Music2, Pause, Play, Repeat, Repeat1, RepeatOff, Rewind, Shuffle, Square,
 } from '@lucide/astro';
 
 const CONTROL = 20;
@@ -44,9 +44,11 @@ const ICONS = {
   prev: [Rewind, CONTROL],
   next: [FastForward, CONTROL],
 
-  /* The mode controls: one face for shuffle, and repeat's two — Lucide's
-     `repeat` and `repeat-1` — which the button flips between. */
+  /* The mode controls: one face for shuffle, and one for each of repeat's
+     three modes — Lucide's `repeat-off`, `repeat` and `repeat-1` — which the
+     button flips between. */
   shuffle: [Shuffle, CONTROL],
+  'repeat-off': [RepeatOff, CONTROL],
   repeat: [Repeat, CONTROL],
   'repeat-one': [Repeat1, CONTROL],
 
