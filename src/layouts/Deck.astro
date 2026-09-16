@@ -157,7 +157,7 @@ const albumsJson = JSON.stringify(albums).replace(/</g, '\\u003c');
   </div>
 </div>
 
-<Noscript />
+<Noscript albums={albums} />
 
 <script>
   import '../scripts/deck.ts';
