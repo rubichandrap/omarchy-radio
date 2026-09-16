@@ -59,18 +59,18 @@ ul, ol { list-style: none; }
 a { color: var(--ac); text-decoration: none; }
 
 /* ── icons ───────────────────────────────────────────────
-   src/lib/icons.ts, drawn as cells on a lattice at one cell to the pixel.
-   The transport used characters, and not one of them was in a subset this
-   site ships — geometric shapes and arrows are in neither latin nor
-   latin-ext, so they came from whatever font the browser fell back to, and
-   ▶ and ◀ can arrive as colour emoji on a phone.
+   Lucide's, through src/components/Icon.astro: an inline svg per icon,
+   built into the page, stroked in currentColor at the size its context
+   calls for. The transport used to be characters — ▶ ◀◀ ■ ❙❙ — and not one
+   of them was in a subset this site ships, so they came from whatever font
+   the browser fell back to, and ▶ and ◀ can arrive as colour emoji on a
+   phone. Between that and this, they were cells on a lattice.
 
-   No width or height here: each carries its own, in cells, which is what
-   keeps the steps on the pixel grid. */
+   No width or height here: the drawing carries its own. No fill either — a
+   fill would turn a stroked icon into a blob. */
 .i {
   display: block;
   flex: none;
-  fill: currentColor;
 }
 
 /* An icon set in a line of text sits on the baseline rather than above it. */
@@ -83,17 +83,22 @@ a { color: var(--ac); text-decoration: none; }
 /* Both faces of a two-state icon are in the page and one is shown: a class
    is cheaper than rewriting a button forty times a minute, and it keeps the
    drawing out of the deck. The showing rules are the more specific ones, so
-   they win without an !important or an ordering trick. */
+   they win without an !important or an ordering trick. The row caret is the
+   one the deck fills in itself — both faces copied out of #rowCaret — and it
+   flips the same way. */
 .tb-play .i-pause,
 .tb-repeat .i-repeat-one,
 .caret .i-caret-up,
+.tr-c .i-caret-down,
+.tr-c.is-open .i-caret-right,
 .tb-play.is-playing .i-play,
 .tb-repeat.is-one .i-repeat,
 .caret.is-open .i-caret-down { display: none; }
 
 .tb-play.is-playing .i-pause,
 .tb-repeat.is-one .i-repeat-one,
-.caret.is-open .i-caret-up { display: block; }
+.caret.is-open .i-caret-up,
+.tr-c.is-open .i-caret-down { display: block; }
 
 a:hover { color: var(--fg); }
 

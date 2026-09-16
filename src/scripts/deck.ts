@@ -18,7 +18,6 @@ import {
   TRACKS_DIR, TRACKS_MANIFEST,
 } from '../lib/site.ts';
 import { assignSlugs, fold } from '../lib/slug.ts';
-import { iconSvg } from '../lib/icons.ts';
 import { dateLabel, fmt, hms, lengthLabel, plural } from '../lib/format.ts';
 import { SKINS, derive, type Skin, type Theme } from './theme.ts';
 import { DESKTOP, desktopName, watchDesktop } from './omarchy-theme.ts';
@@ -66,7 +65,7 @@ var IDS = [
   'marq', 'artist', 'curTime', 'durTime', 'vis', 'prev', 'toggle', 'stop', 'next',
   'shuffle', 'repeat',
   'seek', 'seekFill', 'seekHead', 'volKnob', 'volRot', 'volLabel',
-  'playlistKind', 'playlistName', 'tracks', 'trHead', 'playlistNote',
+  'playlistKind', 'playlistName', 'tracks', 'trHead', 'rowCaret', 'playlistNote',
   'status', 'seg', 'tabSongs', 'tabPodcast',
   'lyricsBtn', 'lyricsBox', 'lyrics', 'installBtn',
   'findRow', 'find', 'findHint'
@@ -2125,8 +2124,10 @@ function paintTracks() {
     if (opens) {
       var caret = pick(b, '.tr-c');
       caret.hidden = false;
-      // The same table the page's own icons come out of.
-      caret.innerHTML = iconSvg(S.epOpen ? 'caret-down' : 'caret-right');
+      /* Markup the build rendered, not a drawing: both faces are in the page
+         (#rowCaret) and the row's class says which one shows. */
+      caret.innerHTML = el.rowCaret.innerHTML;
+      caret.classList.toggle('is-open', S.epOpen);
       b.setAttribute('aria-expanded', S.epOpen ? 'true' : 'false');
     }
     b.addEventListener('click', function (ev) {

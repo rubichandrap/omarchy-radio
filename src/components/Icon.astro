@@ -1,14 +1,74 @@
 ---
-/* One of src/lib/icons.ts, in the page. The deck draws the same ones from the
-   same table when it builds a row itself. */
-import { iconSvg } from '../lib/icons.ts';
+/* The deck's icons, from Lucide.
+ *
+ * One table, and it is the whole of the mapping: a name the components and
+ * the deck call an icon by, and the drawing that name is. Lucide ships the
+ * drawings, this file picks them, and the build renders them into the page —
+ * inline, in currentColor, so an icon takes the colour it sits in and there
+ * is no icon font and no second request. Nothing here is drawn by hand, and a
+ * name that is not in the table fails the build — `astro check` where the
+ * name is a literal, and the lookup below for anything it cannot see — rather
+ * than rendering an empty box.
+ *
+ * Two sizes: 20px on the six buttons, so none of them weighs more than
+ * another, and 12px on the ones that sit in a line of text — the two list
+ * glyphs, the carets, and the arrow that says a link leaves the site.
+ *
+ * The deck does not read this table. It is build-time only (@lucide/astro
+ * cannot be imported by the client bundle), and the one icon the deck needs
+ * at runtime, the caret on an episode's row, is markup this file rendered
+ * into the page for it to copy — see #rowCaret in Panel.astro.
+ *
+ * What is rendered carries the deck's own name for the icon (`i i-play`)
+ * beside Lucide's two (`lucide lucide-play`): the deck's names are what the
+ * stylesheet flips when a button has two faces, and what the tests look for.
+ * Nothing here passes Lucide a name to read out, so it marks the svg
+ * aria-hidden on its own.
+ */
+import {
+  ArrowUpRight, ChevronDown, ChevronRight, ChevronUp, FastForward,
+  Mic, Music2, Pause, Play, Repeat, Repeat1, Rewind, Shuffle, Square,
+} from '@lucide/astro';
+
+const CONTROL = 20;
+const INLINE = 12;
+
+const ICONS = {
+  play: [Play, CONTROL],
+  pause: [Pause, CONTROL],
+  /* A square, the way a player marks stop — Lucide's has the one rounded
+     corner this deck allows itself. */
+  stop: [Square, CONTROL],
+  /* Two triangles, the way a tape deck marks them, rather than a bar and one
+     the way a disc player does: this deck has a tape on its readout. */
+  prev: [Rewind, CONTROL],
+  next: [FastForward, CONTROL],
+
+  /* The mode controls: one face for shuffle, and repeat's two — Lucide's
+     `repeat` and `repeat-1` — which the button flips between. */
+  shuffle: [Shuffle, CONTROL],
+  repeat: [Repeat, CONTROL],
+  'repeat-one': [Repeat1, CONTROL],
+
+  /* The carets: the theme menu's, and the one on an episode's row. */
+  'caret-down': [ChevronDown, INLINE],
+  'caret-up': [ChevronUp, INLINE],
+  'caret-right': [ChevronRight, INLINE],
+
+  /* The two lists. A note for the songs, a microphone for the show, both
+     small enough to sit beside a 10px label without shouting over it. */
+  note: [Music2, INLINE],
+  mic: [Mic, INLINE],
+
+  /* Leaves the site. The one icon that is not a shape but a sign. */
+  'arrow-ne': [ArrowUpRight, INLINE],
+} as const;
 
 interface Props {
-  name: string;
-  /** Extra classes, for the ones shown and hidden in pairs. */
-  class?: string;
+  name: keyof typeof ICONS;
 }
 
-const { name, class: cls = '' } = Astro.props;
+const { name } = Astro.props;
+const [Draw, size] = ICONS[name as keyof typeof ICONS];
 ---
-<Fragment set:html={iconSvg(name, cls)} />
+<Draw size={size} class={`i i-${name}`} />

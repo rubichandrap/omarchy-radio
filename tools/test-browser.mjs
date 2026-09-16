@@ -32,6 +32,8 @@
        stops at the end of the play order and the next play starts from its head
      - the shuffle order: a permutation of the list walked one row at a time,
        a new cycle opened on a different row, and the deck it survives
+     - the icons: Lucide drawings inline in the page, one size on the six
+       buttons and one on the inline set, no lattice left under any of them
 */
 
 import { spawn } from 'node:child_process';
@@ -1359,6 +1361,148 @@ async function offline({ songs }) {
   }
 }
 
+/* The icons, in the page and from Lucide.
+ *
+ * What this replaces drew cells: axis-aligned rects at one to one CSS pixel,
+ * with shape-rendering="crispEdges" to hold the steps on the grid. So the
+ * question is not whether there is an svg — there always was — but that every
+ * icon is a stroked Lucide drawing at the size its context calls for, that no
+ * lattice is left under any of them, and that the caret on an episode's row
+ * is markup the build rendered rather than something the deck drew.
+ */
+const ICON_PROBE = `window.__icon = function (sel) {
+  var el = document.querySelector(sel);
+  if (!el) return null;
+  return Array.prototype.map.call(el.querySelectorAll('svg'), function (s) {
+    var box = s.getBoundingClientRect();
+    var rect = s.querySelector('rect');
+    return {
+      cls: s.getAttribute('class') || '',
+      w: Math.round(box.width),
+      h: Math.round(box.height),
+      shown: box.width > 0 && box.height > 0,
+      fill: s.getAttribute('fill') || '',
+      stroke: s.getAttribute('stroke') || '',
+      crisp: s.hasAttribute('shape-rendering'),
+      drawn: s.querySelectorAll('path, circle, ellipse, line, polyline, polygon, rect').length,
+      rounded: !!(rect && (rect.getAttribute('rx') || rect.getAttribute('ry'))),
+      uses: s.querySelectorAll('use').length
+    };
+  });
+};
+window.__icons = function () {
+  return Array.prototype.map.call(document.querySelectorAll('svg.i'), function (s) {
+    return {
+      cls: s.getAttribute('class') || '',
+      crisp: s.hasAttribute('shape-rendering'),
+      uses: s.querySelectorAll('use').length
+    };
+  });
+};`;
+
+const has = (icon, name) => icon.cls.split(' ').includes(name);
+
+async function icons({ songs, eps }) {
+  section('the icons, from Lucide');
+  const browser = await Browser.launch('no-user-gesture-required');
+  const tab = await browser.tab();
+  try {
+    // The probe goes with the document it was installed in, so every
+    // navigation in this section has to put it back.
+    const go = async (path) => { await tab.go(path); await tab.eval(ICON_PROBE); };
+    await go('/playlist');
+
+    // One control's faces: the two-state buttons carry both in the page, so
+    // every check here is about the one the browser is showing.
+    const face = async (sel) => (await tab.eval(`window.__icon(${JSON.stringify(sel)})`) || [])
+      .filter((i) => i.shown);
+    const size = (i) => `${i.w}x${i.h}`;
+
+    /* The deck plays on arrival, and paints the button it does that with in
+       the same pass as the row state — so this waits for the deck, not for
+       the browser's audio, which starts a paint earlier. */
+    const s = await until('the deck to own the playlist', async () => {
+      const st = await tab.state();
+      if (!(st.playing && st.rows >= songs.length)) return null;
+      const t = await face('#toggle');
+      return t.length === 1 && has(t[0], 'lucide-pause') ? st : null;
+    });
+    if (!s) return;
+
+    /* The six buttons. One size across them, so no button weighs more than
+       another; the play button is filled and shows its pause face, because
+       the deck has been playing since it booted. */
+    for (const [sel, name] of [['#prev', 'lucide-rewind'], ['#toggle', 'lucide-pause'],
+                               ['#stop', 'lucide-square'], ['#next', 'lucide-fast-forward'],
+                               ['#shuffle', 'lucide-shuffle'], ['#repeat', 'lucide-repeat']]) {
+      const shown = await face(sel);
+      if (!ok(shown.length === 1, `${sel} shows one icon, not ${shown.length}`)) continue;
+      const i = shown[0];
+      ok(has(i, name), `${sel} is ${name}, not ${i.cls.split(' ').join(' ')}`);
+      is(size(i), '20x20', `${sel}'s icon is 20px on the button`);
+      ok(i.fill === 'none' && i.stroke === 'currentColor',
+         `${sel}'s icon is a stroke in the button's colour (fill ${i.fill}, stroke ${i.stroke})`);
+      ok(!i.crisp && i.drawn > 0, `${sel}'s icon is drawn, not a lattice cell`);
+      is(i.uses, 0, `${sel}'s icon is inline, not a reference to a sprite`);
+    }
+
+    /* And the inline set: the two list glyphs, the caret on the theme menu,
+       the arrow that says a link leaves the site. */
+    for (const [sel, name] of [['#tabSongs', 'lucide-music-2'], ['#tabPodcast', 'lucide-mic'],
+                               ['#themeCaret', 'lucide-chevron-down'], ['.home', 'lucide-arrow-up-right']]) {
+      const shown = await face(sel);
+      if (!ok(shown.length === 1, `${sel} shows one icon, not ${shown.length}`)) continue;
+      const i = shown[0];
+      ok(has(i, name), `${sel} is ${name}, not ${i.cls.split(' ').join(' ')}`);
+      is(size(i), '12x12', `${sel}'s icon is the inline size`);
+    }
+
+    /* Stop is Lucide's square, and its corner is round: the one shape that
+       would still pass for a lattice cell if the answer were "rects". */
+    const stop = (await face('#stop'))[0];
+    if (stop) ok(stop.drawn === 1 && stop.rounded,
+                 'stop is one rounded rect, which is a Lucide drawing and not a cell');
+
+    /* The one icon the deck used to draw for itself: an episode's row caret.
+       It is markup the build rendered (#rowCaret), copied into the row, and
+       the row's class says which of its two faces shows. A page for an
+       episode opens that episode's panel, so the first press closes it. */
+    await go(eps[0].path);
+    const ep = await until('the episode to open', async () => {
+      const st = await tab.state();
+      if (st.row !== eps[0].title) return null;
+      const f = await face('.tr-c');
+      return f.length === 1 && has(f[0], 'lucide-chevron-down') ? st : null;
+    });
+    ok(ep, 'an open episode row points down, at the panel it opened');
+    if (ep) {
+      const faces = await tab.eval('window.__icon(".tr-c")');
+      is(faces.length, 2, 'both caret faces are in the row, and the row picks one');
+      is(size((await face('.tr-c'))[0]), '12x12', 'the row caret is the inline size');
+      await tab.click('#tracks li.is-on a.track');
+      const closed = await until('the row to close', async () => {
+        const f = await face('.tr-c');
+        return f.length === 1 && has(f[0], 'lucide-chevron-right') ? f : null;
+      });
+      ok(closed, 'pressing the row flips the caret to the face that points sideways');
+    }
+
+    // The same icons on a page that names nothing: there is one deck.
+    await go('/');
+    const front = await until('the front page to play', async () => {
+      const f = await face('#toggle');
+      return f.length === 1 && has(f[0], 'lucide-pause') ? f : null;
+    });
+    ok(front, 'the front page ships the same transport');
+    const all = await tab.eval('window.__icons()');
+    ok(all.length > 0 && all.every((i) => has(i, 'lucide') && !i.crisp && !i.uses),
+       `every icon on the page is a Lucide drawing (${all.length} of them)`);
+  } finally {
+    await tab.close();
+    await browser.close();
+  }
+}
+
 /* ── go ──────────────────────────────────────────────────────────────── */
 const server = serve();
 let code = 1;
@@ -1376,6 +1520,7 @@ try {
   await reveal(site);
   await stalePlaylist(site);
   await desktopTheme();
+  await icons(site);
   await offline(site);
   console.log(`  ${passed - mark} checks`);
   console.log(`\n${passed} checks passed`);
