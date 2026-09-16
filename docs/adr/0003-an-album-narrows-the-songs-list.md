@@ -8,8 +8,9 @@ It is a scope over the songs list. The panel gains an album picker over the
 songs — a row of its own under the panel head, because it grows with the index
 while the head already holds the seg — and the seg goes on answering which of
 the two lists is showing. The play order is drawn over the list a play seated
-the deck in — a row pressed in an album walks that album's songs; `all` is the
-whole playlist, which is what the unscoped list always was.
+the deck in: a row pressed in an album walks that album's songs, and a row
+pressed on `all` walks the whole playlist, which is what the unscoped list
+always was.
 
 The reason is that a song from Open Lo-Fi and a song from the community are
 the same kind of thing — an MP3, an entry in a manifest, the same row, the
