@@ -6,6 +6,16 @@ declare module '*?raw' {
   export default content;
 }
 
+/* Vite's import.meta.glob, for the album lists the build enumerates rather
+   than naming one by one: a new album is a directory and a line in the index,
+   and a directory the index does not declare stops the build. */
+declare interface ImportMeta {
+  glob<T = unknown>(
+    pattern: string,
+    options?: { eager?: boolean; import?: string },
+  ): Record<string, T>;
+}
+
 /* The experimental HTML-in-canvas attribute. A canvas carrying it lays out its
    subtree, which is what lets src/scripts/lcd-vhs.ts host the readout inside
    one and read it back as a texture. Not in Astro's own attribute types

@@ -8,7 +8,7 @@
  */
 import type { GetStaticPaths } from 'astro';
 import Deck from '../../layouts/Deck.astro';
-import { readEpisodes, readTracks } from '../../lib/sources.ts';
+import { readEpisodes, readTracks, readAlbums } from '../../lib/sources.ts';
 import { isReservedSlug, seedOf } from '../../lib/lists.ts';
 import type { Item, Show } from '../../lib/item.ts';
 import { audioMeta } from '../../lib/seo.ts';
@@ -18,6 +18,7 @@ import { CANON } from '../../lib/site.ts';
 export const getStaticPaths = (() => {
   const tracks = readTracks();
   const show = readEpisodes();
+  const albums = readAlbums();
 
   for (const track of tracks) {
     if (isReservedSlug(track.key)) {
@@ -31,7 +32,14 @@ export const getStaticPaths = (() => {
 
   return tracks.map((track) => ({
     params: { slug: track.slug },
-    props: { track, tracks, show },
+    props: {
+      track, tracks, show,
+      /* The album the song is in, by name: the page says where the song comes
+         from, and every song is in exactly one — readTracks() stamps a song
+         with the directory its list was read out of, and refuses a directory
+         the index does not declare. */
+      albumName: albums.find((a) => a.slug === track.album)!.name,
+    },
   }));
 }) satisfies GetStaticPaths;
 
@@ -39,19 +47,22 @@ interface Props {
   track: Item;
   tracks: Item[];
   show: Show;
+  albumName: string;
 }
 
-const { track, tracks, show } = Astro.props;
+const { track, tracks, show, albumName } = Astro.props;
 const path = `/${track.key}`;
-const artist = track.artist || 'unknown';
+/* A song with no artist is named by its title alone: a byline for a name the
+   file does not carry reads as a page about somebody who is not there. */
+const byline = track.artist ? ` by ${track.artist}` : '';
 const audio = `${CANON}/${track.url.replace(/^\/+/, '')}`;
 ---
 <Deck
   head={{
-    title: `${track.title} by ${artist} · Omarchy Radio`,
+    title: `${track.title}${byline} · Omarchy Radio`,
     description:
-      `${track.title} by ${artist}, on Omarchy Radio: a song about the Omarchy desktop, ` +
-      'made by somebody who runs it. Press play.',
+      `${track.title}${byline}, on Omarchy Radio: ` +
+      `a song from the ${albumName} album. Press play.`,
     path,
     ogType: 'music.song',
     extra: audioMeta(audio),

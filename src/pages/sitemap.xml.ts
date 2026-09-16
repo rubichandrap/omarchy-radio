@@ -10,7 +10,7 @@
  */
 
 import type { APIRoute } from 'astro';
-import { readEpisodes, readTracks } from '../lib/sources.ts';
+import { readAlbums, readEpisodes, readTracks } from '../lib/sources.ts';
 import { CANON } from '../lib/site.ts';
 
 interface Entry {
@@ -50,12 +50,15 @@ function esc(s: string): string {
 
 export const GET: APIRoute = () => {
   const tracks = readTracks();
+  const albums = readAlbums();
   const { episodes } = readEpisodes();
   const newest = episodes.map((e) => e.date ?? '').filter(Boolean).sort().pop() ?? '';
 
   const body = [
     url({ loc: '/', priority: '1.0', freq: 'weekly', lastmod: newest, image: true }),
     url({ loc: '/playlist', priority: '0.9', freq: 'weekly' }),
+    // Every album answers at the root, beside the two lists.
+    ...albums.map((a) => url({ loc: `/${a.slug}`, priority: '0.9', freq: 'weekly' })),
     url({ loc: '/podcast', priority: '0.9', freq: 'weekly', lastmod: newest }),
     ...tracks.map((t) => url({ loc: `/${t.key}`, priority: '0.8', freq: 'monthly' })),
     ...episodes.map((e) =>

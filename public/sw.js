@@ -18,7 +18,7 @@
 
    Bump VERSION to retire every old cache on the next activate. */
 
-var VERSION = 'v7';
+var VERSION = 'v9';
 var BASE = '/omarchy-radio';
 var SHELL = 'omarchy-radio-' + VERSION;
 var PAGE = BASE + '/index.html';
@@ -41,7 +41,12 @@ var ASSETS = [
   BASE + '/assets/images/icon-192.png',
   BASE + '/assets/images/icon-512.png',
   BASE + '/assets/images/apple-touch-icon.png',
-  BASE + '/tracks/playlist.json',
+  BASE + '/tracks/albums.json',
+  /* One line per album: an album's list joins this list when the album does,
+     and VERSION moves with it, or a cold offline visit has no rows for it.
+     The audio never goes in the cache; only the rows. */
+  BASE + '/tracks/omarchy/playlist.json',
+  BASE + '/tracks/lofi/playlist.json',
   BASE + '/stories/feed.rss'
 ];
 

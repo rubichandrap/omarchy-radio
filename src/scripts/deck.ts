@@ -7,7 +7,9 @@
  *
  * There is no live stream. The playlist is the station: it starts itself on
  * arrival and walks its play order — the list's own, or a shuffled one —
- * coming round again at the end unless the repeat mode says otherwise.
+ * coming round again at the end unless the repeat mode says otherwise. The
+ * list it walks is the album in view when one is chosen, and the whole
+ * playlist otherwise.
  * Everything the deck plays is a file in this repo, which is why every one
  * of them has an address of its own.
  */
@@ -15,14 +17,16 @@
 import {
   BASE, CANON, LYRICS_DIR, SHOW, SHOW_LYRICS, SHOW_PODCAST, STATION,
   STORIES_FEED, STORIES_TAG, SHOW_HOME as STORIES_HOME,
-  TRACKS_DIR, TRACKS_MANIFEST,
+  TRACKS_DIR, TRACKS_INDEX,
 } from '../lib/site.ts';
 import { assignSlugs, fold } from '../lib/slug.ts';
 import { dateLabel, fmt, hms, lengthLabel, plural } from '../lib/format.ts';
+import { panelTitle, songNumbers } from '../lib/rows.ts';
 import { SKINS, derive, type Skin, type Theme } from './theme.ts';
 import { DESKTOP, desktopName, watchDesktop } from './omarchy-theme.ts';
 import type { Item, Stamped } from '../lib/item.ts';
 import type { Kind } from '../lib/slug.ts';
+import type { Album, AlbumIndex } from '../lib/lists.ts';
 import {
   drawField, fieldPainted, initField, markFieldStale, sizeField,
 } from './field.ts';
@@ -66,7 +70,7 @@ var IDS = [
   'shuffle', 'repeat',
   'seek', 'seekFill', 'seekHead', 'volKnob', 'volRot', 'volLabel',
   'playlistKind', 'playlistName', 'tracks', 'trHead', 'rowCaret', 'playlistNote',
-  'status', 'seg', 'tabSongs', 'tabPodcast',
+  'status', 'seg', 'tabSongs', 'tabPodcast', 'albs',
   'lyricsBtn', 'lyricsBox', 'lyrics', 'installBtn',
   'findRow', 'find', 'findHint'
 ] as const;
@@ -105,6 +109,12 @@ interface State {
   tab: Tab;
   /** The list the address is naming while nothing is playing. */
   route: '' | 'playlist' | 'podcast';
+  /** The album the songs panel is showing, by slug, and '' for all of them:
+      what the address names and what the selector marks. */
+  album: string;
+  /** Every album the index declares, in its order — the selector's links and
+      the words the router knows an album's address by. */
+  albums: Album[];
   /** The playing episode is showing what it is about. */
   epOpen: boolean;
   feedErr: boolean;
@@ -140,6 +150,8 @@ var S: State = {
   show: null,
   tab: 'songs',
   route: '',
+  album: '',
+  albums: [],
   epOpen: true,
   feedErr: false,
   playing: false,
@@ -160,6 +172,12 @@ var S: State = {
    when a browser is offering it — the one the desktop is actually wearing.
    src/scripts/omarchy-theme.ts is where that comes from. */
 var skins: Skin[] = SKINS.slice();
+
+/* The albums this page was built with, read the way the item a permalink names
+   is: before anything is fetched, so an album's address is a route from the
+   first tick rather than a path the browser is sent off to fetch. The index
+   replaces them a moment later. */
+S.albums = (window as unknown as { __ALBUMS__?: Album[] }).__ALBUMS__ || [];
 
 function skinNamed(name: string): Skin {
   for (var i = 0; i < skins.length; i++) {
@@ -760,13 +778,41 @@ function wireGraph() {
   }
 }
 
-// The list the mode names, the list on screen, and the item playing out of
-// the first of them.
-function playingList(): Item[] {
-  return S.mode === 'story' ? S.eps : S.tracks;
+/* The songs the deck plays and the panel shows: one album's, or the whole
+   playlist. An album is a scope over the songs list, and the list the deck
+   walks is whichever is in view — the whole playlist while no album is
+   chosen, that album's songs otherwise.
+
+   Held rather than filtered per call, because the play order is compared to
+   the list it was drawn from by reference: a fresh array every call would
+   make every paint look stale and draw the order again. */
+var scope: Item[] = [];
+var scopeOf: { album: string; tracks: Item[] } | null = null;
+
+function songScope(): Item[] {
+  if (!S.album) return S.tracks;
+  if (!scopeOf || scopeOf.album !== S.album || scopeOf.tracks !== S.tracks) {
+    scope = S.tracks.filter(function (t) { return t.album === S.album; });
+    scopeOf = { album: S.album, tracks: S.tracks };
+  }
+  return scope;
 }
 
-function onScreenList(): Item[] { return S.tab === 'stories' ? S.eps : S.tracks; }
+// The list the mode names: the episodes while a story plays, and the songs —
+// the album in view, or the whole playlist — while a track does.
+function playingList(): Item[] {
+  return S.mode === 'story' ? S.eps : songScope();
+}
+
+function onScreenList(): Item[] { return S.tab === 'stories' ? S.eps : songScope(); }
+
+/** The album a slug names, out of the index this deck holds. */
+function albumNamed(slug: string): Album | null {
+  for (var i = 0; i < S.albums.length; i++) {
+    if (S.albums[i]!.slug === slug) return S.albums[i]!;
+  }
+  return null;
+}
 
 /* ── find ────────────────────────────────────────────────
    Thirty-odd songs is a list you read. A hundred is a list you search.
@@ -978,9 +1024,11 @@ function step(d: number): number {
 /* The end of a cycle: the order is drawn again, the deck stands at its head,
    and the one item the head may not be is the item that has just played — a
    reshuffle that opens on the song that ended the last cycle is not a
-   reshuffle. */
-function newCycle(l: Item[]): number {
-  var last = keyOf(l[order[pos]!]);
+   reshuffle. `heard` is for the caller that has just changed the list under
+   the deck — an album picked from the outside — and can say what played
+   where the order it holds cannot. */
+function newCycle(l: Item[], heard?: string): number {
+  var last = heard !== undefined ? heard : keyOf(l[order[pos]!]);
   var drawn = shuffled(ownOrder(l));
   if (last && drawn.length > 1 && keyOf(l[drawn[0]!]) === last) {
     var j = 1 + Math.floor(Math.random() * (drawn.length - 1));
@@ -1056,8 +1104,11 @@ function endOfOrder() {
   S.playing = false;
   S.cur = 0;
   /* Named for the list that ended: an episode running out is not the songs
-     playlist running out, and CONTEXT.md keeps the two words apart. */
-  setStatus(S.mode === 'story' ? 'the episodes have ended' : 'the playlist has ended');
+     playlist running out, and an album running out is not the playlist
+     running out either. CONTEXT.md keeps the words apart. */
+  setStatus(S.mode === 'story' ? 'the episodes have ended'
+    : S.album ? 'the album has ended'
+    : 'the playlist has ended');
   paintAll();
   syncRoute('replace');
 }
@@ -1128,9 +1179,12 @@ function play(src: string, mode: Mode, ti: number) {
    page the listener opened stays the page they are on, and a permalink
    goes on meaning a song somebody picked. */
 function autostart(how?: How) {
-  if (!S.tracks.length) { setStatus('nothing in the playlist'); return; }
+  /* The list that plays, so arriving at an album's address starts the album
+     the way arriving at the deck starts the playlist. */
+  var l = songScope();
+  if (!l.length) { setStatus('nothing in the playlist'); return; }
   chose = false;
-  playFrom(S.tracks, 'track', 0, how);
+  playFrom(l, 'track', 0, how);
 }
 
 function playFrom(list: Item[], mode: Mode, i: number, how?: How) {
@@ -1145,11 +1199,21 @@ function playFrom(list: Item[], mode: Mode, i: number, how?: How) {
 
 // The two ways in that mean the listener named this one: a row, or a link.
 // Stepping with the transport goes through playFrom() and leaves that be.
+//
+// The song plays where it is: in the album in view when one is up, which is
+// what makes a row pressed in an album walk that album, and in the whole
+// playlist otherwise. The index names the flat list either way, so the song
+// is found in the list that plays by its key.
 function playTrack(i: number, how?: How) {
+  var it = S.tracks[i];
+  if (!it) return;
   chose = true;
   S.tab = 'songs';
   S.route = 'playlist';
-  playFrom(S.tracks, 'track', i, how);
+  var l = songScope();
+  var at = indexOfKey(l, it.key);
+  if (at < 0) return; // not in the album in view: there is no such place
+  playFrom(l, 'track', at, how);
 }
 
 function playStory(i: number, how?: How) {
@@ -1311,8 +1375,16 @@ function tuneIn() {
   if (!r.known || !r.kind) { autostart('replace'); return; }
   S.route = r.kind;
 
-  // A list, rather than something in one: read it while the playlist runs.
-  if (!r.slug) { setTab(LISTS[r.kind].tab); autostart('replace'); return; }
+  /* A list, rather than something in one — or an album, which sits at the
+     root as a list of its own: the album's songs become the list that plays,
+     so an arrival here starts it the way any arrival starts the deck, and
+     the address it was asked for stands. */
+  if (!r.slug) {
+    if (r.album) S.album = r.album;
+    setTab(LISTS[r.kind].tab);
+    autostart('replace');
+    return;
+  }
 
   restoreList(r.kind);
   if (navigate(r, 'replace')) return;
@@ -1561,8 +1633,15 @@ function applyManifest(j: Manifest | null) {
   paintTracks();
 }
 
-/** tracks/playlist.json, as a contributor writes it. */
+/* The merged payload the deck holds and keeps: what the index and the albums
+   made between them. The shape it has always been, so the copy kept from the
+   last visit paints the same list it always did. */
 interface Manifest { tracks?: Item[] }
+
+/* The albums, as public/tracks/albums.json declares them: the shape
+   src/lib/lists.ts defines, imported above as a type. The import erases at
+   build time, so the feed parser that module carries stays out of the browser
+   bundle — the deck needs the shape, not the parsing. */
 
 function readManifest(): Manifest | null {
   try { return JSON.parse(localStorage.getItem(STORE_TRACKS) || 'null'); } catch (e) { return null; }
@@ -1590,21 +1669,61 @@ function listSettled() {
   }
 }
 
-function loadTracks() {
-  fetch(TRACKS_MANIFEST).then(function (r) {
-    if (!r.ok) throw new Error('no playlist');
-    return r.json() as Promise<Manifest>;
+/* The index names the albums; each album's list sits beside its own audio and
+   is fetched in parallel, merged into the one flat list the deck has always
+   held. One album failing to arrive fails the load as a whole: the copy kept
+   from the last visit stands and the attempt repeats on the next visit,
+   rather than a playlist quietly missing an album. */
+function fetchAlbums(): Promise<{ albums: Album[]; tracks: Item[] }> {
+  return fetch(TRACKS_INDEX).then(function (r) {
+    if (!r.ok) throw new Error('no albums');
+    return r.json() as Promise<AlbumIndex>;
   }).then(function (j) {
-    // What tuneIn() started, if anything, named by the one thing that
-    // survives a reordering.
-    var open = S.mode === 'track' && S.tracks[S.ti] ? S.tracks[S.ti].key : '';
+    var named = j.albums || [];
+    return Promise.all(named.map(function (a) {
+      var url = TRACKS_DIR + a.slug + '/playlist.json';
+      return fetch(url).then(function (r) {
+        if (!r.ok) throw new Error('no album ' + a.slug);
+        return r.json() as Promise<Manifest>;
+      }).then(function (list) {
+        // Each song is stamped with the album it came out of: the directory
+        // its audio and its list live in. An entry with no artist is given
+        // the empty one, so nothing downstream has to tell a missing key
+        // from an absent artist; whether a second line is drawn is still
+        // each surface's own call.
+        return (list.tracks || []).map(function (t) {
+          return resolveTrack(Object.assign({}, t, {
+            artist: t.artist || '',
+            album: a.slug
+          }));
+        });
+      });
+    })).then(function (lists) {
+      var merged: Item[] = [];
+      lists.forEach(function (l) { merged = merged.concat(l); });
+      return { albums: named, tracks: merged };
+    });
+  });
+}
+
+function loadTracks() {
+  fetchAlbums().then(function (j) {
+    /* What tuneIn() started, if anything, named by the one thing that
+       survives a reordering — and out of the list that plays, which is the
+       album in view when one is, rather than the flat list the manifest is
+       about to rebuild. */
+    var l = playingList();
+    var open = S.mode === 'track' && l[S.ti] ? l[S.ti]!.key : '';
     /* And the cycle it is walking, read now, while the indices still name
        these items: the manifest is about to replace the list, and the order
        is drawn again around the item that was playing. */
-    var walked = walkedKeys(S.tracks);
+    var walked = walkedKeys(l);
     var waiting = linkPending;
-    applyManifest(j);
-    saveManifest(j);
+    /* The albums the index declares replace the ones the page was built
+       with: a page served from a cache can be older than the index. */
+    if (j.albums.length) S.albums = j.albums;
+    applyManifest({ tracks: j.tracks });
+    saveManifest({ tracks: j.tracks });
     keptTracks = false;
 
     // A link that names a track opens on that track, and with nothing kept
@@ -1620,12 +1739,16 @@ function loadTracks() {
     // The kept copy picked the track; the real playlist gets the last word
     // on where it sits, and on whether it is still there at all.
     if (open) {
-      var i = indexOfKey(S.tracks, open);
+      /* The list that plays is read again rather than kept: the manifest has
+         just replaced the array the scope was filtered out of, so an album's
+         songs come out of the new one. */
+      var scopeNow = playingList();
+      var i = indexOfKey(scopeNow, open);
       if (i < 0) { autostart('replace'); return; }
       // A list reloaded is a list the order is rebuilt around, or the deck
       // goes on standing in the list as it used to be.
       var moved = i !== S.ti;
-      anchor(S.tracks, i, walked);
+      anchor(scopeNow, i, walked);
       if (moved) paintAll();
     }
 
@@ -1652,12 +1775,16 @@ function loadTracks() {
 // here so nobody has to hand-escape spaces or accents in the manifest. An
 // entry that already carries a url is left alone.
 //
+// The file names the MP3 in its album's own directory, which is the segment
+// the address carries too.
+//
 // The entry is copied rather than rebuilt field by field, which is how
 // "explicit" used to get lost on the way to the badge that was added for
 // it, and how "lyrics" would have gone the same way.
 function resolveTrack(t: Item): Item {
   if (t.url) return t;
-  return Object.assign({}, t, { url: TRACKS_DIR + encodeURIComponent(t.file || '') });
+  var dir = t.album ? t.album + '/' : '';
+  return Object.assign({}, t, { url: TRACKS_DIR + dir + encodeURIComponent(t.file || '') });
 }
 
 /* ── painting ────────────────────────────────────────── */
@@ -1670,6 +1797,17 @@ function setStatus(s: string) {
 function showName(): string { return (S.show && S.show.name) || SHOW; }
 function showLink(): string { return (S.show && S.show.link) || STORIES_HOME; }
 
+/* What the readout calls what is playing: the album the song came out of
+   while one of its songs is playing, so the panel never has to be asked what
+   is being heard — it can be showing the other list — and the playlist when
+   no album owns it. The number is the song's place in its album, which is
+   the number its row wears wherever the row is shown. */
+function trackLabel(t: Item, at: number): string {
+  var up = t.album ? albumNamed(t.album) : null;
+  return (up ? up.name.toLowerCase() : 'playlist') + ' · track ' +
+    (songNumbers(playingList())[at] || at + 1);
+}
+
 function paintLcd() {
   var it = nowItem();
   var story = S.mode === 'story' ? it : null;
@@ -1681,11 +1819,13 @@ function paintLcd() {
   el.srcLabel.textContent = story
     ? 'podcast · episode ' + epNumber(S.ti)
     : t
-      ? 'playlist · track ' + (S.ti + 1)
+      ? trackLabel(t, S.ti)
       : 'playlist';
 
+  /* A song with no artist is its title alone: joining an empty one would
+     leave the separator hanging off the end of the marquee. */
   var marquee = it
-    ? (it.title + '  —  ' + it.artist)
+    ? (it.artist ? it.title + '  —  ' + it.artist : it.title)
     : (STATION.name + '  —  ' + STATION.tag);
   Array.from(el.marq.children).forEach(function (n) { n.textContent = marquee; });
 
@@ -1695,7 +1835,7 @@ function paintLcd() {
     ? [showName(), dateLabel(story.ms || 0), lengthLabel(story.secs || 0)]
         .filter(Boolean).join(' · ')
     : t
-      ? (t.album || t.artist)
+      ? t.artist
       : STATION.tag;
 
   /* The tab names the address, the way the title the page was served with
@@ -1709,7 +1849,7 @@ function paintLcd() {
   document.title = chose && story
     ? story.title + ' · ' + showName()
     : chose && t
-      ? t.title + ' by ' + t.artist + ' · Omarchy Radio'
+      ? (t.artist ? t.title + ' by ' + t.artist : t.title) + ' · Omarchy Radio'
       : 'Omarchy Radio';
 
   paintClock();
@@ -1753,19 +1893,21 @@ function paintTransport() {
 }
 
 /* ── routing ────────────────────────────────────
-   The address is the state. Two lists, each with a path of its own:
+   The address is the state. Two lists, each with a path of its own, and every
+   album at the root beside them:
 
      /                      the deck, playing the playlist
      /playlist              the songs
      /playlist/<song>       that song, playing
+     /<album>               one album's songs, playing
      /podcast               the episodes
      /podcast/<episode>     that episode, playing
 
    Those are real pages. Astro writes one per item — src/pages/playlist and
-   src/pages/podcast — so a link that is shared arrives as a document of its
-   own: the song's name in the tab, its own card where it is pasted, and the
-   item itself baked into the page so the sound can start before anything is
-   fetched.
+   src/pages/podcast — and one per album, at the root, so a link that is
+   shared arrives as a document of its own: the song's name in the tab, its
+   own card where it is pasted, and the item itself baked into the page so the
+   sound can start before anything is fetched.
 
    From there it is one deck. Pressing a row swaps the audio and rewrites
    the address, and nothing reloads — which is what keeps following a link
@@ -1786,6 +1928,9 @@ var LISTS: Record<Kind, { tab: Tab; mode: Mode; list: () => Item[] }> = {
 interface Route {
   kind: '' | Kind;
   slug: string;
+  /** The album the address names, when it names one: an album is a place of
+      its own at the root, and this is the word it is spelled with. */
+  album: string;
   known: boolean;
   /** A /#song link from before the paths existed. */
   legacy: boolean;
@@ -1821,9 +1966,16 @@ function parseRoute(pathname: string, hash: string): Route {
     .replace(/\/+$/, '');
   var seg = p.split('/').filter(Boolean);
   if (!seg.length) return fromHash(hash);
-  var kind = seg[0] as Kind;
-  if (!LISTS[kind] || seg.length > 2) return stray();
-  return route(kind, seg.length > 1 ? seg[1]! : '', false);
+  var head = seg[0]!;
+  if (LISTS[head as Kind]) {
+    if (seg.length > 2) return stray();
+    return route(head as Kind, seg.length > 1 ? seg[1]! : '', false, '');
+  }
+  /* An album's address is its slug at the root, and nothing below it: a song
+     is at /playlist/<song> wherever in the playlist it sits, so /<album>/<x>
+     is not a place this deck owns. */
+  if (seg.length === 1 && albumNamed(head)) return route('playlist', '', false, head);
+  return stray();
 }
 
 /* The links from before there were paths: /#song, and /#stories/episode.
@@ -1833,28 +1985,30 @@ function fromHash(hash: string): Route {
   var h = String(hash || '').replace(/^#/, '');
   try { h = decodeURIComponent(h); } catch (e) { /* as typed */ }
   h = h.toLowerCase();
-  if (!h) return route('', '', false);
+  if (!h) return route('', '', false, '');
   var m = /^(stories|podcast|playlist)\/(.+)$/.exec(h);
-  if (m) return route(m[1] === 'playlist' ? 'playlist' : 'podcast', m[2]!, true);
-  if (/^[a-z0-9][a-z0-9-]*$/.test(h)) return route('playlist', h, true);
-  return route('', '', false); // a fragment that names no track: it is home
+  if (m) return route(m[1] === 'playlist' ? 'playlist' : 'podcast', m[2]!, true, '');
+  if (/^[a-z0-9][a-z0-9-]*$/.test(h)) return route('playlist', h, true, '');
+  return route('', '', false, ''); // a fragment that names no track: it is home
 }
 
-function route(kind: '' | Kind, slug: string, legacy: boolean): Route {
+function route(kind: '' | Kind, slug: string, legacy: boolean, album: string): Route {
   return {
     kind: kind,
     slug: String(slug || '').replace(/[^a-z0-9-]/g, ''),
+    album: String(album || '').replace(/[^a-z0-9-]/g, ''),
     known: true,
     legacy: !!legacy
   };
 }
 
-function stray(): Route { return { kind: '', slug: '', known: false, legacy: false }; }
+function stray(): Route { return { kind: '', slug: '', album: '', known: false, legacy: false }; }
 
 function here(): Route { return parseRoute(location.pathname, location.hash); }
 
 /* The path for what the deck is showing: the item the listener named, if
-   the panel is showing the list it came out of, and otherwise the list
+   the panel is showing the list it came out of; the album in view, if the
+   songs are on screen and an album is what is up; and otherwise the list
    being read.
 
    A song the deck started by itself does not count. The playlist plays on
@@ -1863,11 +2017,20 @@ function here(): Route { return parseRoute(location.pathname, location.hash); }
    could never be linked to, and three canonical links pointing at a song
    nobody asked for. Press a row or follow a link and the address is
    yours; until then it stays the page it is. */
-function wantedPath(): string {
+function showingRel(): string {
   var it = nowItem();
-  var showing = S.tab === 'stories' ? 'podcast' : 'playlist';
-  var rel = (chose && it && it.kind === showing) ? '/' + it.key : (S.route ? '/' + S.route : '/');
-  return (BASE + rel).replace(/\/+$/, '') || '/';
+  var stories = S.tab === 'stories';
+  var showing = stories ? 'podcast' : 'playlist';
+  if (chose && it && it.kind === showing) return '/' + it.key;
+  // The episodes are a list of their own: an album in view does not follow
+  // them, and the songs come back to it when the tab does.
+  if (stories) return '/podcast';
+  if (S.album) return '/' + S.album;
+  return S.route ? '/' + S.route : '/';
+}
+
+function wantedPath(): string {
+  return (BASE + showingRel()).replace(/\/+$/, '') || '/';
 }
 
 /* Pressing a row is a navigation and earns a history entry: back returns
@@ -1891,10 +2054,48 @@ function syncRoute(how?: How) {
 function paintCanonical() {
   var link = document.querySelector('link[rel="canonical"]');
   if (!link) return;
-  var it = nowItem();
-  var showing = S.tab === 'stories' ? 'podcast' : 'playlist';
-  var rel = (chose && it && it.kind === showing) ? '/' + it.key : (S.route ? '/' + S.route : '/');
-  link.setAttribute('href', CANON + rel);
+  link.setAttribute('href', CANON + showingRel());
+}
+
+/* Picking an album is a command as much as a place, and what it does depends
+   on what is playing. An item inside the new album means nothing is
+   interrupted and the order is simply drawn around it. An item outside it
+   means the album starts there and then: its first track with shuffle off,
+   and with shuffle on the head of a freshly drawn cycle, which is the deck's
+   own new-cycle path and not a special case. A deck that is paused, stopped
+   or never started has nothing to replace, so nothing starts: it is put at
+   the head of the album it now plays and stays quiet.
+
+   `was` is the key of the item the deck stood on before the album changed,
+   read by the caller while the list that held it still stood. */
+function pickAlbum(was: string, live: boolean, how?: How) {
+  var l = songScope();
+  if (!l.length) return;
+  var at = was ? indexOfKey(l, was) : -1;
+  if (at >= 0) { anchor(l, at); return; }
+  if (live) { playFrom(l, 'track', S.shuffle ? newCycle(l, was) : 0, how); return; }
+  if (S.ti >= 0) standAtHead(l);
+}
+
+/* Leaving an album — for the whole playlist, for home, for an address that
+   names nothing: the songs show whole again, and the deck's place is said
+   again in the flat list — the item it stood on when that list carries it,
+   the head otherwise. Nothing is started: a change of scope is a place, and
+   a place is not a press. Returns whether there was an album to leave, which
+   is what the callers repaint on.
+
+   pickAlbum() is the other direction: a scope entered rather than left. */
+function leaveScope(): boolean {
+  if (!S.album) return false;
+  var before = keyOf(nowItem());
+  S.album = '';
+  if (S.mode === 'track' && S.ti >= 0) {
+    var l = playingList();
+    var at = before ? indexOfKey(l, before) : -1;
+    if (at >= 0) anchor(l, at);
+    else standAtHead(l);
+  }
+  return true;
 }
 
 /* Applies a route that came from outside: a link, the back button, a path
@@ -1906,12 +2107,14 @@ function navigate(r: Route, how?: How): boolean {
   if (!r.known) return false;
 
   if (!r.kind) {
-    // Home is the front of the deck: the songs, from the top. Whatever is
-    // already playing keeps playing — going back to the front is not a
-    // reason to lose your place in a song.
+    /* Home is the front of the deck: the whole playlist. Whatever is already
+       playing keeps playing — going back to the front is not a reason to
+       lose your place in a song — and the order is drawn around it in the
+       list that now plays. */
     S.route = '';
+    var hadAlbum = leaveScope();
     chose = false;
-    var moved = setTab('songs');
+    var moved = setTab('songs') || hadAlbum;
     if (!nowItem()) { autostart(how); return true; }
     if (moved) paintAll();
     syncRoute(how);
@@ -1919,7 +2122,41 @@ function navigate(r: Route, how?: How): boolean {
   }
 
   var spec = LISTS[r.kind as Kind];
-  if (!r.slug) { showTab(spec.tab, how); return true; }
+
+  /* An album's address: the album is what plays, and picking it is also a
+     command — pickAlbum() says what that does to the sound. The address
+     names no song, so the deck stops calling the page one, and the readout
+     goes back to saying where it is. */
+  if (r.album) {
+    /* Read before the album changes, while the list that holds it still
+       stands: the deck's place is a key, and indices do not survive the
+       swap. */
+    var wasAlbum = keyOf(nowItem());
+    var live = !!audio && !audio.paused;
+    S.album = r.album;
+    S.route = 'playlist';
+    chose = false;
+    revealKey = '';
+    setTab('songs');
+    el.tracks.scrollTop = 0;
+    pickAlbum(wasAlbum, live, how);
+    paintAll();
+    syncRoute(how);
+    return true;
+  }
+
+  /* The list itself: every song, or every episode. For the songs, `all` is a
+     choice of scope like any album: the whole playlist is what plays — a
+     song is in it wherever in an album it sits — and the order is drawn
+     around whatever is playing. The episodes leave the album in view alone,
+     which is what brings it back when the songs come back. */
+  if (!r.slug) {
+    var hadScope = r.kind === 'playlist' ? leaveScope() : false;
+    showTab(spec.tab, how);
+    // The rows changed even where the tab did not.
+    if (hadScope) paintAll();
+    return true;
+  }
 
   var i = indexOfKey(spec.list(), r.kind + '/' + r.slug);
   if (i < 0) return false;
@@ -1928,13 +2165,14 @@ function navigate(r: Route, how?: How): boolean {
      the back button, a path typed by hand. Whatever the list turns out to
      look like, that item is what the listener came for and it should be on
      screen rather than however far down it happens to sit. */
-  revealKey = r.kind + '/' + r.slug;
+  var key = r.kind + '/' + r.slug;
+  revealKey = key;
 
   /* Already the one playing: the back button landing on what is in the
      room, or a second press on the row that is going. Show it, do not
      start it again — twenty minutes into an episode, that is the whole
      difference between following a link and losing your place. */
-  if (S.mode === spec.mode && S.ti === i) {
+  if (S.mode === spec.mode && keyOf(nowItem()) === key) {
     if (S.tab !== spec.tab) showTab(spec.tab, 'replace');
     else {
       // Nothing to repaint, so nothing else would bring it into view.
@@ -1943,6 +2181,14 @@ function navigate(r: Route, how?: How): boolean {
     }
     return true;
   }
+
+  /* A song's address names no album — /playlist/<song> is where a song
+     lives, wherever in the playlist it sits. Played out of the album in view
+     when the song is one of its own, which is the state a press on its row
+     leaves behind and what the back button returns to; out of the whole
+     playlist otherwise, and then the whole playlist is what the panel
+     shows. */
+  if (r.kind === 'playlist' && S.album && indexOfKey(songScope(), key) < 0) S.album = '';
 
   if (r.kind === 'podcast') playStory(i, how);
   else playTrack(i, how);
@@ -1970,7 +2216,15 @@ function wireLinks() {
     if (!r.known) return; // a file, the feed, some other page: let it load
 
     e.preventDefault();
-    if (navigate(r, 'push')) return;
+    if (navigate(r, 'push')) {
+      /* A press the deck answers without starting anything — an album link
+         whose album already holds the song, `all`, home, the row that is
+         already playing — is still a press. A deck that arrived muted is
+         playing silent, and this is the gesture that pays for the sound;
+         a path that started something has bought it already. */
+      if (silenced()) unsilence();
+      return;
+    }
     // Ours, and it names nothing this deck is holding. The page may well
     // exist, so let the browser go and get it rather than sitting here.
     location.href = u.href;
@@ -2003,11 +2257,58 @@ function paintTabs() {
   // the one being read is the current page rather than a button held down.
   setCurrent(el.tabSongs, !stories);
   setCurrent(el.tabPodcast, stories);
-  el.playlistKind.textContent = stories ? 'episodes' : 'playlist';
-  el.playlistName.textContent = stories
-    ? showName().toLowerCase()
-    : STATION.name.toLowerCase();
+  /* The heading over the list is one rule, written once: the build wrote this
+     span through panelTitle(), and the deck repaints exactly what it wrote. */
+  var up = albumNamed(S.album);
+  var title = panelTitle(stories ? 'podcast' : 'playlist',
+    { name: showName(), home: showLink(), episodes: [] }, up ? up.name : '');
+  el.playlistKind.textContent = title.kind;
+  el.playlistName.textContent = title.name;
   el.tracks.setAttribute('aria-label', stories ? 'Episodes' : 'Playlist');
+  paintAlbums();
+}
+
+/** The albums the selector's links were built from, so a paint that changed
+    nothing about them does not throw them away and build them again. A load
+    arrives as a new array, which is the whole of why the reference is kept. */
+var paintedAlbums: Album[] | null = null;
+
+/* The album selector: the seg's own boxes and links, over the songs and
+   nowhere else, with the album in view marked as the page being read. The
+   build wrote it, so what is left to do here is to keep it honest: rebuilt
+   when the albums themselves change — an album added since the page was
+   written is the one case — and re-marked on every paint, because the
+   marking is the deck's place and the place moves. */
+function paintAlbums() {
+  var stories = S.tab === 'stories';
+  el.albs.hidden = stories || !S.albums.length;
+  if (el.albs.hidden) return;
+
+  if (S.albums !== paintedAlbums) {
+    paintedAlbums = S.albums;
+    el.albs.innerHTML = '';
+    var frag = document.createDocumentFragment();
+    frag.appendChild(albumLink('', 'all'));
+    S.albums.forEach(function (a) { frag.appendChild(albumLink(a.slug, a.name.toLowerCase())); });
+    el.albs.appendChild(frag);
+  }
+
+  Array.from(el.albs.children).forEach(function (node) {
+    var a = node as HTMLAnchorElement;
+    var on = a.dataset.album === S.album;
+    a.classList.toggle('is-on', on);
+    setCurrent(a, on);
+  });
+}
+
+function albumLink(slug: string, label: string): HTMLAnchorElement {
+  var a = document.createElement('a');
+  a.className = 'seg-b';
+  a.dataset.album = slug;
+  // An album's address is its slug at the root; `all` is the list itself.
+  a.href = slug ? BASE + '/' + slug : BASE + '/playlist';
+  a.textContent = label;
+  return a;
 }
 
 function setTab(tab: Tab): boolean {
@@ -2073,6 +2374,14 @@ function paintTracks() {
   var stories = S.tab === 'stories';
   var terms = queryTerms();
   paintTabs();
+  /* Numbers over the whole list before anything is filtered, so a row keeps
+     the number it has among the matches: a song's place in its album, and an
+     episode's from the far end. */
+  var nums = stories ? [] : songNumbers(list);
+  /* The row the deck is standing on, by key: an album on screen is not the
+     list that is playing, so the index the deck holds is not the index this
+     list is walked by. */
+  var liveKey = !stories && S.mode === 'track' ? keyOf(nowItem()) : '';
   stateCell = null;
   playingRow = null;
   playingKey = '';
@@ -2080,10 +2389,10 @@ function paintTracks() {
   var frag = document.createDocumentFragment();
   var shown = 0;
   /* The whole list is walked even while filtering: a row keeps the number it
-     has in the list, not the number it has among the matches, the same way
+     has in its album, not the number it has among the matches, the same way
      the page behind a permalink shows one row still numbered 02. */
   list.forEach(function (tr, i) {
-    var on = i === S.ti && S.mode === (stories ? 'story' : 'track');
+    var on = stories ? (i === S.ti && S.mode === 'story') : (!!liveKey && tr.key === liveKey);
     if (!matches(tr, terms)) return;
     shown++;
     var li = document.createElement('li');
@@ -2091,9 +2400,11 @@ function paintTracks() {
     /* A row is a link to the item it names: it can be opened in a tab of
        its own, copied out of the context menu, and read by anything that
        reads links. The press itself is still handled here, so following
-       one costs nothing of what is already playing. */
+       one costs nothing of what is already playing. The address is the
+       site's, base and all, the way the build writes it — a row the deck
+       draws is the same link the page arrived with. */
     var b = document.createElement('a');
-    b.href = '/' + tr.key;
+    b.href = BASE + '/' + tr.key;
     b.className = 'track' + (on ? ' is-on' : '');
     b.innerHTML =
       '<span class="tr-n"></span>' +
@@ -2105,10 +2416,10 @@ function paintTracks() {
         '<span class="tr-artist"></span>' +
       '</span>' +
       '<span class="tr-s"><span class="tr-st"></span><span class="tr-c" hidden></span></span>';
-    // Songs are numbered down the list. Episodes are numbered from the far
-    // end, because the newest is at the top and episode 01 is episode 01.
+    // Songs are numbered by their place in their album, episodes from the
+    // far end, because the newest is at the top and episode 01 is episode 01.
     pick(b, '.tr-n').textContent =
-      String(stories ? epNumber(i) : i + 1).padStart(2, '0');
+      String(stories ? epNumber(i) : nums[i]).padStart(2, '0');
     pick(b, '.tr-title').textContent = tr.title;
     pick(b, '.tr-ex').hidden = !tr.explicit;
     // An episode has no artist to name under the title: it has a date and
@@ -2144,13 +2455,17 @@ function paintTracks() {
       revealKey = '';
       if (opens) toggleEpisode();
       else if (stories) playStory(i, 'push');
-      else playTrack(i, 'push');
+      /* The row was walked out of the list on screen — the album's when one
+         is up, the whole playlist otherwise — and that list is the one that
+         plays. playTrack() takes indices into the flat list and finds the
+         song in the list that plays by its key. */
+      else playTrack(indexOfKey(S.tracks, tr.key), 'push');
     });
 
     // The same address, as the thing it is: press it and it is on the
     // clipboard, hold a modifier and the browser opens it.
     var link = document.createElement('a');
-    link.href = '/' + tr.key;
+    link.href = BASE + '/' + tr.key;
     link.className = 'tr-link';
     link.textContent = '#';
     link.title = 'Permalink — press to copy';
@@ -2245,14 +2560,17 @@ function episodeBody(ep: Item): HTMLElement {
  *   is still playing all of them, which is what "on repeat" would claim.
  */
 function paintTrackNote(shown = -1) {
+  /* What is on screen is what a note under the list can be about: the album
+     in view, or the whole playlist. */
+  var stories = S.tab === 'stories';
+  var tracks = stories ? S.eps : songScope();
   if (shown >= 0) {
-    var of = S.tab === 'stories' ? S.eps.length : S.tracks.length;
     el.playlistNote.textContent = shown
-      ? shown + ' of ' + plural(of, S.tab === 'stories' ? 'episode' : 'track')
-      : 'nothing matched \u2014 ' + plural(of, S.tab === 'stories' ? 'episode' : 'track') + ' to look through';
+      ? shown + ' of ' + plural(tracks.length, stories ? 'episode' : 'track')
+      : 'nothing matched \u2014 ' + plural(tracks.length, stories ? 'episode' : 'track') + ' to look through';
     return;
   }
-  if (S.tab === 'stories') { paintStoryNote(); return; }
+  if (stories) { paintStoryNote(); return; }
   /* The phrases are the settings', and the repeat one is absent when the
      deck will simply stop at the end: a count is a count, while "shuffled"
      and "on repeat" are promises about what happens next. */
@@ -2260,8 +2578,8 @@ function paintTrackNote(shown = -1) {
     (S.repeat === 'all' ? ', on repeat'
       : S.repeat === 'one' ? ', repeating one'
       : '');
-  el.playlistNote.textContent = S.tracks.length
-    ? S.tracks.length + ' tracks' + phrase
+  el.playlistNote.textContent = tracks.length
+    ? tracks.length + ' tracks' + phrase
     : 'nothing in the playlist yet';
 }
 
@@ -2449,7 +2767,7 @@ function paintLyrics() {
   // A sheet is a song's. The podcast tab carries an episode's chapters and
   // notes in the list itself, so there is nothing to toggle there.
   var t = SHOW_LYRICS && S.mode === 'track' && S.tab === 'songs'
-    ? S.tracks[S.ti] || null
+    ? nowItem()
     : null;
 
   // An episode carries its notes in the list itself, so there is nothing
@@ -2754,10 +3072,15 @@ function boot() {
   window.addEventListener('popstate', function () {
     var r = here();
     if (navigate(r, 'replace')) return;
+    var hadPop = leaveScope();
     S.route = r.known ? r.kind : '';
     chose = false;
     if (!nowItem()) autostart('replace');
-    else syncRoute('replace');
+    else {
+      // The rows changed even where the tab did not.
+      if (hadPop) paintAll();
+      syncRoute('replace');
+    }
   });
 
   /* A link from before the paths existed, followed in this tab: the

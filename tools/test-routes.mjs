@@ -26,6 +26,14 @@
  *   4. A link in a page points at an address that is not served. Every
  *      internal href in every generated page is followed.
  *
+ *   5. The album index and the album directories disagree. The build refuses
+ *      either direction through parseAlbums(); this reads the same directories
+ *      off disk and holds the same rule up beside it.
+ *
+ *   6. An album's page is one the build writes at the site root, beside the
+ *      two lists — so a slug the root already owns has to be refused, and the
+ *      pages, their rows, their numbers and their note have to be there.
+ *
  * It serves dist/, so it tests what would be deployed. No dependencies.
  */
 
@@ -39,10 +47,11 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { assignSlugs, fold, slugify } from '../src/lib/slug.ts';
 import { SKINS, derive } from '../src/scripts/theme.ts';
-/* The parsing, not the reading: the build imports the manifest and the feed
-   through Vite, which plain node knows nothing about. This is the same code
-   over the same two files. */
-import { parseEpisodes, parseTracks } from '../src/lib/lists.ts';
+/* The parsing, not the reading: the build finds the album lists through the
+   bundler and the feed through a `?raw` import, which plain node knows
+   nothing about. This is the same code over the same files. */
+import { checkAlbumSlugs, parseAlbums, parseEpisodes } from '../src/lib/lists.ts';
+import { songNumbers } from '../src/lib/rows.ts';
 import { BASE as SITE_BASE, CANON } from '../src/lib/site.ts';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -332,6 +341,80 @@ function slugRule() {
   console.log(`  ${ADVERSARIAL.length} awkward titles, all spelled as expected`);
 }
 
+/* The album index and the directories are two facts that have to agree, and
+   every disagreement is silent: an album declared with no list is one that
+   plays nothing, and a directory holding songs or a list that nobody declared
+   is one that never plays at all. parseAlbums() refuses them all — the build
+   runs it over the lists the bundler finds, this runs it over the directories
+   on disk, where a directory of audio with no list at all shows up too — and
+   then over a set that disagrees each way, because a rule that has never
+   bitten is not a rule. A directory is an album one when it holds a list or
+   any audio; `lyrics/` holds sheets, and is not. */
+function albumRule(index, dirs) {
+  const declared = index.albums ?? [];
+  for (const album of declared) {
+    const dir = dirs.find((d) => d.slug === album.slug);
+    if (!ok(dir, `public/tracks/albums.json declares "${album.slug}", but there is no public/tracks/${album.slug}/`)) continue;
+    ok(dir.list, `public/tracks/albums.json declares "${album.slug}", but public/tracks/${album.slug}/playlist.json is not there`);
+  }
+  for (const { slug } of dirs) {
+    ok(declared.some((a) => a.slug === slug),
+       `public/tracks/${slug}/ holds songs or a list, and public/tracks/albums.json does not declare it`);
+  }
+  const refuses = (i, d) => { try { parseAlbums(i, d); return false; } catch { return true; } };
+  ok(refuses({ albums: [{ slug: 'declared', name: 'Declared' }] }, []),
+     'an album declared with no directory at all is refused');
+  ok(refuses({ albums: [{ slug: 'declared', name: 'Declared' }] }, [{ slug: 'declared' }]),
+     'an album declared with a directory but no list is refused');
+  ok(refuses({ albums: [] }, [{ slug: 'stray', list: { tracks: [] } }]),
+     'a directory holding a list nobody declares is refused');
+  ok(refuses({ albums: [] }, [{ slug: 'stray' }]),
+     'a directory holding songs and no list at all is refused');
+  ok(refuses({ albums: [{ slug: 'declared', name: 'Declared' }] },
+             [{ slug: 'declared', list: { tracks: [] } }]),
+     'a declared album whose list names no songs is refused');
+  console.log(`  ${declared.length} albums declared, ${dirs.length} on disk, in agreement`);
+}
+
+/* An album is a place the build writes. Its slug is its address at the site
+   root, beside the two lists, and the page behind that address carries the
+   album's rows, the panel title naming it, the note counting its songs and
+   the selector over them with the album marked as the page being read. The
+   numbers count within the album: a row's number is the song's place in its
+   own album, wherever the song is shown.
+
+   A slug the root already owns would take a page that belongs to something
+   else — the list of every song is at /playlist, and the front page is
+   /index.html — so parseAlbums() refuses it and says which. That is checked
+   here over the words the root actually owns, because a rule that has never
+   bitten is not a rule. */
+function albumPlaceRule(albums) {
+  const accepts = (a) => { try { checkAlbumSlugs(a); return true; } catch { return false; } };
+  ok(accepts(albums), 'the index declares no album whose address the site root already owns');
+  ok(!accepts([{ slug: 'lofi', name: 'One' }, { slug: 'lofi', name: 'Two' }]),
+     'an album declared twice, under one slug, is refused');
+  /* The words the root owns that are themselves shaped like an address: these
+     are the ones the clash rule catches, and it says what it clashed with.
+     A slug with a dot in it — sw.js, sitemap.xml — is refused for its shape
+     before it ever gets to the clash. */
+  for (const slug of ['playlist', 'podcast', 'all', 'index', '404', 'assets', 'stories', 'tracks']) {
+    let said = '';
+    try { checkAlbumSlugs([{ slug, name: 'Taken' }]); } catch (e) { said = e.message; }
+    ok(said.includes(`"${slug}"`) && said.includes(`/${slug}`),
+       `an album called "${slug}" is refused, and the refusal names the clash (${said || 'nothing was refused'})`);
+  }
+  ok(/every song/.test((() => {
+    try { checkAlbumSlugs([{ slug: 'playlist', name: 'Taken' }]); } catch (e) { return e.message; }
+    return '';
+  })()) , 'and says what the address is already for');
+  // The slug is the address, so it is held to the shape an address is: a
+  // dotted or spaced one would be a page written somewhere nobody asked for.
+  for (const slug of ['Lofi!', 'open lofi', '../lofi', 'lofi.json', 'sw.js']) {
+    ok(!accepts([{ slug, name: 'Odd' }]), `an album slugged "${slug}" is refused`);
+  }
+  console.log(`  ${albums.length} albums, none of them a page the root already owns`);
+}
+
 /* ── the run ───────────────────────────────────────────────────────────── */
 
 async function build() {
@@ -359,8 +442,28 @@ async function main() {
     process.exit(1);
   }
 
-  const tracks = parseTracks(JSON.parse(
-    await readFile(join(ROOT, 'public/tracks/playlist.json'), 'utf8')));
+  /* The index names the albums; each album's list and its audio sit in that
+     album's own directory. Both are read here the way the build reads them —
+     a directory is an album one when it holds a list or any audio — and the
+     flattened list is the deck's own. */
+  const trackRoot = join(ROOT, 'public/tracks');
+  const index = JSON.parse(await readFile(join(trackRoot, 'albums.json'), 'utf8'));
+  const albums = index.albums ?? [];
+  const dirs = [];
+  for (const entry of await readdir(trackRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const inner = await readdir(join(trackRoot, entry.name));
+    const list = inner.includes('playlist.json')
+      ? JSON.parse(await readFile(join(trackRoot, entry.name, 'playlist.json'), 'utf8'))
+      : undefined;
+    if (list || inner.some((f) => f.endsWith('.mp3'))) dirs.push({ slug: entry.name, list });
+  }
+  let tracks = [];
+  try {
+    tracks = parseAlbums(index, dirs);
+  } catch (e) {
+    ok(false, `the build would refuse these files: ${e.message}`);
+  }
   const show = parseEpisodes(
     await readFile(join(ROOT, 'public/stories/feed.rss'), 'utf8'));
   const eps = show.episodes;
@@ -388,6 +491,12 @@ async function main() {
   }
   console.log(`  ${tracks.length} filenames, none of them needing an escape`);
 
+  console.log('the album index and the directories agree');
+  albumRule(index, dirs);
+
+  console.log('the albums, at their own addresses at the root');
+  albumPlaceRule(albums);
+
   console.log('every item has a page, and nothing else does');
   for (const kind of ['playlist', 'podcast']) {
     const want = new Set([...(kind === 'playlist' ? tracks : eps)].map((i) => `${i.slug}.html`));
@@ -395,6 +504,15 @@ async function main() {
     const have = new Set(await readdir(join(DIST, kind)));
     for (const name of want) ok(have.has(name), `dist/${kind}/${name} was not written`);
     for (const name of have) ok(want.has(name), `dist/${kind}/${name} is a page for nothing`);
+  }
+  /* The root: one page per album, beside the pages the two lists and the site
+     itself are written as — and nothing at the root that no page claims. */
+  {
+    const albumFiles = new Set(albums.map((a) => `${a.slug}.html`));
+    const known = new Set(['index.html', '404.html', 'playlist.html', 'podcast.html', ...albumFiles]);
+    const root = (await readdir(DIST)).filter((f) => f.endsWith('.html'));
+    for (const name of albumFiles) ok(root.includes(name), `dist/${name} was not written`);
+    for (const name of root) ok(known.has(name), `dist/${name} is a page for nothing`);
   }
   // The list pages are written twice on purpose; both have to be there.
   for (const path of ['playlist.html', 'playlist/index.html',
@@ -405,7 +523,7 @@ async function main() {
   const server = await serve();
   try {
     console.log('asking for every route');
-    const routes = ['/', '/playlist', '/podcast',
+    const routes = ['/', '/playlist', ...albums.map((a) => `/${a.slug}`), '/podcast',
                     ...tracks.map((t) => `/${t.key}`), ...eps.map((e) => `/${e.key}`)];
 
     for (const path of routes) {
@@ -446,8 +564,10 @@ async function main() {
       ok(s.kind === item.kind, `${path}: wrong kind baked in`);
       ok(s.title === item.title, `${path}: wrong title baked in`);
       ok(title(body).includes(item.title), `${path}: the title tag is ${title(body)}`);
-      if (item.kind === 'playlist') ok(s.file === item.file, `${path}: wrong file baked in`);
-      else ok(s.url === item.url, `${path}: wrong audio url baked in`);
+      if (item.kind === 'playlist') {
+        ok(s.file === item.file, `${path}: wrong file baked in`);
+        ok(s.album === item.album, `${path}: wrong album baked in`);
+      } else ok(s.url === item.url, `${path}: wrong audio url baked in`);
       ok(body.includes(`href="${SITE_BASE}${path}"`), `${path}: the page does not link to itself`);
     }
 
@@ -465,6 +585,76 @@ async function main() {
       const { body } = await get('/');
       const rows = (body.match(/class="track[ "]/g) ?? []).length;
       ok(rows === tracks.length, `/ prerenders ${rows} rows for ${tracks.length} songs`);
+    }
+
+    /* An album's own page, with JavaScript off and nothing fetched: the
+       album's rows, the panel title naming it, the note counting its songs,
+       the selector over them with the album marked, and the numbers counting
+       within the album. */
+    const numbers = (body) =>
+      [...body.matchAll(/<span class="tr-n">(\d+)<\/span>/g)].map((m) => m[1]);
+    const selector = (body) => {
+      const inside = /<nav[^>]*id="albs"[^>]*>([\s\S]*?)<\/nav>/.exec(body)?.[1] ?? '';
+      return {
+        present: /id="albs"/.test(body),
+        hidden: /<nav[^>]*id="albs"[^>]*\shidden/.test(body),
+        links: [...inside.matchAll(/<a([^>]*)>([^<]*)<\/a>/g)].map((m) => ({
+          slug: /data-album="([^"]*)"/.exec(m[1])?.[1] ?? null,
+          label: m[2],
+          marked: /aria-current="page"/.test(m[1]),
+        })),
+      };
+    };
+
+    for (const album of albums) {
+      const path = `/${album.slug}`;
+      const mine = tracks.filter((t) => t.album === album.slug);
+      const { body } = await get(path);
+      const rows = (body.match(/class="track[ "]/g) ?? []).length;
+      ok(rows === mine.length, `${path} carries ${rows} rows for ${mine.length} songs`);
+      ok(body.includes(`<span id="playlistName">${album.name.toLowerCase()}</span>`),
+         `${path} does not name the album in the panel title`);
+      ok(new RegExp(`id="playlistNote">${mine.length} tracks, on repeat<`).test(body),
+         `${path} does not count the album's songs under the list`);
+
+      const sel = selector(body);
+      ok(sel.present && !sel.hidden, `${path} has no album selector`);
+      ok(sel.links.length === albums.length + 1 &&
+         sel.links[0].slug === '' && sel.links[0].label === 'all',
+         `${path}: the selector does not start with all`);
+      ok(sel.links.slice(1).map((l) => `${l.slug}`).join(',') === albums.map((a) => a.slug).join(','),
+         `${path}: the selector does not list every album in the index's order`);
+      ok(sel.links.filter((l) => l.marked).map((l) => l.slug).join(',') === album.slug,
+         `${path}: the selector does not mark the album the address names`);
+
+      const want = mine.map((_, i) => String(i + 1).padStart(2, '0'));
+      ok(numbers(body).join(',') === want.join(','),
+         `${path}: the rows are not numbered by their place in the album ` +
+         `(${numbers(body).slice(0, 3).join(' ') || 'none'}, for ${mine.length} songs)`);
+    }
+
+    /* The whole playlist numbers every song by its place in its own album,
+       and a song's own page wears the number the deck gives its row. */
+    {
+      const { body } = await get('/playlist');
+      const want = songNumbers(tracks).map((n) => String(n).padStart(2, '0'));
+      ok(numbers(body).join(',') === want.join(','),
+         '/playlist: the numbers are not every song\u2019s place in its album');
+      for (const t of [tracks[0], tracks[tracks.length - 1]]) {
+        if (!t) continue;
+        const n = String(songNumbers(tracks)[tracks.indexOf(t)]).padStart(2, '0');
+        const { body: one } = await get(`/${t.key}`);
+        ok(numbers(one).length === 1 && numbers(one)[0] === n,
+           `/${t.key}: the row is numbered ${numbers(one)[0]}, not ${n}, its place in ${t.album}`);
+      }
+    }
+
+    /* The episodes are not an album and get no selector: the page the build
+       writes for them carries none over the list. */
+    {
+      const { body } = await get('/podcast');
+      const sel = selector(body);
+      ok(!sel.present || sel.hidden, 'the episodes carry the album selector over them');
     }
 
     console.log('following every link in every page');
@@ -488,6 +678,8 @@ async function main() {
       ['/PLAYLIST/STILL-LICENSED', 'shouted'],
       ['/playlist/nope-not-a-song', 'a song that is not there'],
       ['/nonsense/at/all', 'nonsense'],
+      ...(albums[0] ? [[`/${albums[0].slug}/`, 'an album as a directory'],
+                       [`/${albums[0].slug.toUpperCase()}`, 'an album shouted']] : []),
     ]) {
       const { status, body } = await get(path);
       ok(status === 200 || status === 404, `${path} (${why}) answered ${status}`);
@@ -511,9 +703,19 @@ async function main() {
 
     console.log('the shell the host needs');
     for (const path of ['/robots.txt', '/site.webmanifest', '/sw.js',
-                        '/tracks/playlist.json', '/stories/feed.rss']) {
+                        '/tracks/albums.json', '/stories/feed.rss',
+                        ...dirs.filter((d) => d.list).map((d) => `/tracks/${d.slug}/playlist.json`)]) {
       const { status } = await get(path);
       ok(status === 200, `${path} answered ${status}`);
+    }
+    /* The worker's precache list is written by hand in public/sw.js, so a new
+       album is a line there or a cold offline visit has no rows for it. The
+       index is the declaration and the worker is a second list nobody derives
+       from it, so hold the two together here. */
+    const sw = await readFile(join(ROOT, 'public/sw.js'), 'utf8');
+    for (const path of ['/tracks/albums.json',
+                        ...dirs.filter((d) => d.list).map((d) => `/tracks/${d.slug}/playlist.json`)]) {
+      ok(sw.includes(path), `public/sw.js does not precache ${path}`);
     }
     // The one address in robots.txt that has to be this site's own: a stale
     // one sends the crawlers to a deploy that is not here any more.

@@ -1,8 +1,8 @@
 # Builds the site and publishes it.
 #
 # Astro writes the page that sits behind every permalink — one file per song,
-# one per episode — out of tracks/playlist.json and the mirrored feed. That
-# used to be tools/build-routes.py, and the pages it wrote were committed:
+# one per episode — out of the albums' own track lists and the mirrored feed.
+# That used to be tools/build-routes.py, and the pages it wrote were committed:
 # adding one song meant a pull request carrying the thirty-odd files that song
 # changed. Now the build runs here and nothing generated lives in the repo.
 #

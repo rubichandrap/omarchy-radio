@@ -1,0 +1,62 @@
+---
+/* One page per album, at the album's own address.
+ *
+ * An album is a place a listener can be sent to: /omarchy and /lofi sit at the
+ * site root beside the two lists, and this is the page each of them answers
+ * with. The same deck as every other page — the album's rows in the panel, the
+ * title naming it, the note counting its songs, and the selector over them
+ * marking the album in view.
+ *
+ * The page is the place; the command is the deck's. The album in view is the
+ * list that plays, so arriving here starts this album the way arriving at
+ * the deck starts the playlist, and picking any album — this one or another
+ * — repaints, replaces what is playing when what is playing is outside it,
+ * and leaves it alone when it is not. That side of it is src/scripts/deck.ts.
+ *
+ * readTracks() is what refuses a slug the site root already owns — an album
+ * named "playlist" would take /playlist — so the build stops before it writes
+ * any of these pages.
+ */
+import type { GetStaticPaths } from 'astro';
+import Deck from '../layouts/Deck.astro';
+import { readAlbums, readEpisodes, readTracks } from '../lib/sources.ts';
+import type { Album } from '../lib/lists.ts';
+import type { Item, Show } from '../lib/item.ts';
+
+export const getStaticPaths = (() => {
+  const albums = readAlbums();
+  const tracks = readTracks();
+  const show = readEpisodes();
+
+  return albums.map((album) => ({
+    params: { album: album.slug },
+    props: {
+      album,
+      list: tracks.filter((t) => t.album === album.slug),
+      show,
+    },
+  }));
+}) satisfies GetStaticPaths;
+
+interface Props {
+  album: Album;
+  /** The album's own songs, in the order the album lists them. */
+  list: Item[];
+  show: Show;
+}
+
+const { album, list, show } = Astro.props;
+---
+<Deck
+  head={{
+    title: `${album.name} · Omarchy Radio`,
+    description:
+      `Every song in ${album.name} on Omarchy Radio, ${list.length} of them. ` +
+      'Press one to play it.',
+    path: `/${album.slug}`,
+  }}
+  kind="playlist"
+  list={list}
+  album={album.slug}
+  show={show}
+/>

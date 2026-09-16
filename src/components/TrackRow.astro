@@ -15,8 +15,9 @@ import type { Item } from '../lib/item.ts';
 
 interface Props {
   item: Item;
-  /** What the row is numbered. Songs count down the list; episodes count up
-      from the far end, so episode 01 stays episode 01 as the show grows. */
+  /** What the row is numbered. A song wears its place in its own album, the
+      same wherever it is shown; episodes count up from the far end, so
+      episode 01 stays episode 01 as the show grows. */
   number: number;
   /** The line under the title: an artist for a song, a date and a length for
       an episode. */

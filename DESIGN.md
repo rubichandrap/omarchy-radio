@@ -7,7 +7,7 @@ read as one family.
 
 They are already tied together at the content level. The redesign's hero plays
 **"We Can Fix Everything (The Ultimate Machine)" by Kevin Koontz** — a track that
-lives in `public/tracks/playlist.json` in this repository — and `src/lib/music.ts`
+lives in `public/tracks/omarchy/playlist.json` in this repository — and `src/lib/music.ts`
 carries `radio: 'https://radio.omarchy.org/'`. The main site's front page is
 listening to this station. It should not look like a different project.
 
@@ -414,9 +414,12 @@ and does three things worth writing down:
 - **Folded on both sides** — `src/lib/slug.ts` grew a `fold()` beside
   `slugify()`, for the same reason and with the spaces kept. Nobody hunting
   for Aurélien's song is going to reach for the acute.
-- **The number is the item's place in the list**, not its place among the
-  matches. The whole list is walked and non-matches are skipped, which is the
-  same shape `rowsFor()` uses to number one row on a permalink page 02.
+- **The number is the song's place in its album**, not its place among the
+  matches: the albums arrive one after another, so the count starts again at
+  each one's first song, and a row wears the same number on the album's page,
+  in the whole playlist and on its own page. The whole list is walked and
+  non-matches are skipped, which is the same shape `rowsFor()` uses to number
+  one row on a permalink page 02.
 
 And it stays out of the address. Every other thing the deck does to what is on
 screen is written into the path, because those are places somebody can be
@@ -434,6 +437,17 @@ it permutes the
 *play order* rather than the list on screen — numbers, permalinks and the
 pages the build writes stay still while what advances moves; the reasoning is
 [ADR 0001](docs/adr/0001-shuffle-permutes-play-order-not-the-list.md).
+
+The list the order is drawn over is the album in view when one is chosen, and
+the whole playlist otherwise — an album is a scope, not a list of its own
+([ADR 0003](docs/adr/0003-an-album-narrows-the-songs-list.md)), so picking one
+changes what advances, what the rows number and what the readout names, and
+nothing else. Picking it is a command as well as a place: an item outside the
+new album is replaced there and then — its first track, or the head of a drawn
+cycle while shuffled — an item inside it is left playing with the order drawn
+around it, and a deck that is paused or stopped starts nothing. The readout
+names the album the playing song came out of, which is how the panel answers
+*what am I hearing* even while the episodes are the list on screen.
 
 A cycle is one pass through the order: every item once. Stepping off the end
 draws a new permutation and stands the deck at its head — never the item that

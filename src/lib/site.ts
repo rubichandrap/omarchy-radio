@@ -6,11 +6,14 @@ export const CANON = ((typeof import.meta !== 'undefined' && import.meta.env?.SI
 
 export const SITE_DESC =
   'The community playlist for the Omarchy desktop. Songs about Arch, ' +
-  'Hyprland and dotfiles, every one of them sent in as a pull request.';
+  'Hyprland and dotfiles sent in as pull requests, and the public-domain ' +
+  'Open Lo-Fi collection.';
 
-/** Where the songs live, so they can arrive by pull request. */
+/** Where the songs live, so they can arrive by pull request: an album per
+    directory, its list and its audio side by side. */
 export const TRACKS_DIR = BASE + '/tracks/';
-export const TRACKS_MANIFEST = BASE + '/tracks/playlist.json';
+/** The albums, in the order they are listed. */
+export const TRACKS_INDEX = BASE + '/tracks/albums.json';
 export const LYRICS_DIR = BASE + '/tracks/lyrics/';
 
 /* Omarchy Stories is the show the community makes about running this desktop.
@@ -32,8 +35,8 @@ export const STORIES_FEED = BASE + '/stories/feed.rss';
 export const SHOW_FEED = 'https://api.riverside.com/hosting/1i59HjrN.rss';
 export const STORIES_TAG = 'from the community';
 
-/* Where the songs come from. Every one of them arrived as a pull request, so
-   the line in the header that says so is the way to the place you send one.
+/* Where the songs come from. The community's own arrived as pull requests, so
+   the line in the header is the way to the place you send one.
    tracks/README.md is the three lines of JSON, not the repository front page:
    somebody reading that line wants to know how, not what the licence is. */
 export const REPO = 'https://github.com/omacom/radio.omarchy.org';

@@ -1,13 +1,14 @@
-/* The two lists, out of the two files behind them.
+/* The two lists, out of the files behind them.
  *
- * A song is three lines of public/tracks/playlist.json and a file beside it.
- * An episode is an item in the show's feed, mirrored into
- * public/stories/feed.rss. Both come out of here as an Item, which is the
- * shape the deck holds them in too.
+ * A song is three lines of an album's own list, public/tracks/<album>/
+ * playlist.json, and a file beside it. An episode is an item in the show's
+ * feed, mirrored into public/stories/feed.rss. Both come out of here as an
+ * Item, which is the shape the deck holds them in too.
  *
  * Text in, items out, and nothing here reads a file: src/lib/sources.ts is
- * the half that does. That is what lets tools/test-routes.mjs run this same
- * parsing under plain node, where the bundler's imports mean nothing.
+ * the half that does, and tools/test-routes.mjs reads the same files off
+ * disk. That is what lets the same rule — the index and the directories
+ * agree, in both directions — run in the build and in the route test.
  */
 
 import { XMLParser } from 'fast-xml-parser';
@@ -16,26 +17,106 @@ import type { Item, Show } from './item.ts';
 import { hms } from './format.ts';
 import { SHOW, SHOW_HOME, TRACKS_DIR } from './site.ts';
 
-/** public/tracks/playlist.json, as a contributor writes it. */
+/** One album's list, public/tracks/<album>/playlist.json, as a contributor
+    writes it. Its `file` names the MP3 in that same directory. */
 export interface Manifest {
-  station?: string;
-  name?: string;
   tracks?: Partial<Item>[];
 }
 
-export function parseTracks(data: Manifest): Item[] {
-  const tracks = (data.tracks ?? [])
+/** One album, as public/tracks/albums.json declares it. */
+export interface Album {
+  slug: string;
+  name: string;
+}
+
+/** The index: every album, in the order they are listed. */
+export interface AlbumIndex {
+  albums?: Album[];
+}
+
+/** One album's directory, as the build or the route test found it: the slug it
+    is named by, and its own list if there is one in it. A directory holding
+    songs and no list arrives here too, which is how that gets refused. */
+export interface AlbumDir {
+  slug: string;
+  list?: Manifest;
+}
+
+/** A song before it has been given an address; assignSlugs() adds kind, slug
+    and key once the whole playlist is known. */
+export type TrackEntry = Omit<Item, 'kind' | 'slug' | 'key'>;
+
+export function parseTracks(data: Manifest, album: string): TrackEntry[] {
+  return (data.tracks ?? [])
     .filter((t): t is Partial<Item> & { title: string } => Boolean(t.title))
     .map((t) => ({
       ...t,
       artist: t.artist ?? '',
+      /* Which album the song is in: its directory, and the segment its audio
+         address carries. */
+      album,
       /* Contributors name the file and nothing else, the way the deck's own
          resolveTrack() takes it. Encoded here so nobody has to hand-escape a
          space or an accent in the manifest, and so the same address survives
          being written into an attribute and asked for over HTTP. */
-      url: t.url || TRACKS_DIR + encodeURIComponent(t.file ?? ''),
+      url: t.url || TRACKS_DIR + album + '/' + encodeURIComponent(t.file ?? ''),
     }));
-  return assignSlugs(tracks, 'playlist');
+}
+
+/** Every song, out of the index and the albums' own directories.
+ *
+ * The directories arrive as they were found — the build finds them through
+ * the bundler, the route test off disk — and the two facts have to agree: an
+ * album the index declares with no list is one that plays nothing,
+ * a directory holding songs or a list that nobody declared is one that never
+ * plays at all. Either one is an error rather than a playlist quietly
+ * missing an album.
+ *
+ * One flat list, the albums in index order and each album's songs in its own
+ * order, with the slugs assigned once over the lot — so a song's key and its
+ * permalink do not depend on which album it is in.
+ */
+export function parseAlbums(index: AlbumIndex, dirs: AlbumDir[]): Item[] {
+  const albums = index.albums ?? [];
+  checkAlbumSlugs(albums);
+  const flat: TrackEntry[] = [];
+
+  for (const album of albums) {
+    const dir = dirs.find((d) => d.slug === album.slug);
+    if (!dir) {
+      throw new Error(
+        `public/tracks/albums.json declares the album "${album.slug}", but ` +
+        `public/tracks/${album.slug}/ is not there.`,
+      );
+    }
+    if (!dir.list) {
+      throw new Error(
+        `public/tracks/albums.json declares the album "${album.slug}", but ` +
+        `public/tracks/${album.slug}/playlist.json is not there.`,
+      );
+    }
+    const songs = parseTracks(dir.list, album.slug);
+    if (!songs.length) {
+      throw new Error(
+        `public/tracks/${album.slug}/playlist.json names no songs, so the ` +
+        `album "${album.slug}" the index declares would play nothing. Add a ` +
+        'song to the album, or take its line out of the index.',
+      );
+    }
+    flat.push(...songs);
+  }
+
+  for (const { slug } of dirs) {
+    if (!albums.some((a) => a.slug === slug)) {
+      throw new Error(
+        `public/tracks/${slug}/ holds songs or a list, and ` +
+        'public/tracks/albums.json does not declare it. Add it to the index, ' +
+        'or take the directory out.',
+      );
+    }
+  }
+
+  return assignSlugs(flat, 'playlist');
 }
 
 /* Nothing but what a page needs: the deck reads the same feed a moment after
@@ -166,8 +247,8 @@ export function clip(text: string, limit = 190): string {
  * start it on the first tick — before the manifest, before the feed, while
  * the press that opened the link still counts as engagement. */
 export function seedOf(item: Item): Record<string, unknown> {
-  const keep = ['title', 'artist', 'file', 'url', 'explicit', 'lyrics',
-                'ms', 'secs', 'provisional'] as const;
+  const keep = ['title', 'artist', 'file', 'album', 'url', 'explicit',
+                'lyrics', 'ms', 'secs', 'provisional'] as const;
   const seed: Record<string, unknown> = {};
   for (const k of keep) {
     if (item[k] !== undefined && item[k] !== null) seed[k] = item[k];
@@ -189,3 +270,66 @@ export function isReservedSlug(key: string): boolean {
 }
 
 const KINDS: Kind[] = ['playlist', 'podcast'];
+
+/* What already answers at the site root, and what an album's slug may not be.
+ *
+ * An album lives at its own address at the root, beside the two lists, so a
+ * slug that is already a page there would take a page that belongs to
+ * something else: an album called `playlist` would answer /playlist with the
+ * community's album, and one called `index` would be written over the front
+ * page. `all` is the one word in this list that is not an address at all —
+ * it is what the selector offers for every song, and an album by that name
+ * would be a second `all` in the same row of links.
+ *
+ * The check runs inside parseAlbums(), so both the build and the route test
+ * refuse the same slugs, and the message says which one it is. */
+const ROOT_OWNS: Record<string, string> = {
+  playlist: 'the list of every song answers there',
+  podcast: 'the list of episodes answers there',
+  all: 'the selector offers it for every song',
+  index: 'the front page is written there',
+  '404': 'the page for everything that is not there is written there',
+  assets: 'the fonts and the images the pages are drawn with are served from there',
+  stories: 'the mirrored feed is served from there',
+  tracks: 'the songs themselves are served from there',
+  _astro: 'the built deck and its stylesheet are served from there',
+  'sitemap.xml': 'the addresses for the crawlers are listed there',
+  'robots.txt': 'what the crawlers are told is served there',
+  'sw.js': 'the service worker is served there',
+  'site.webmanifest': 'what the site tells a browser it is is served there',
+  'favicon.ico': 'the icon in the tab is served there',
+};
+
+export function checkAlbumSlugs(albums: Album[]): void {
+  const seen = new Set<string>();
+  for (const album of albums) {
+    /* The slug is the address, and the address is a path the build writes a
+       page at: anything but the shape an address is (lower case, words joined
+       by hyphens) is a file somewhere nobody asked for. */
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(album.slug)) {
+      throw new Error(
+        `public/tracks/albums.json declares the album "${album.slug}", which is not ` +
+        'the shape an address is: lower case, words joined by hyphens, nothing but ' +
+        'a-z, 0-9 and -. The slug is where the album answers, so it has to be one.',
+      );
+    }
+    /* A slug twice is a directory listed twice: the same songs, and the second
+       copy's addresses renamed behind the contributor's back. */
+    if (seen.has(album.slug)) {
+      throw new Error(
+        `public/tracks/albums.json declares the album "${album.slug}" twice, so its ` +
+        'songs would be listed twice and the second copy would answer somewhere ' +
+        'else. Keep one line per album.',
+      );
+    }
+    seen.add(album.slug);
+    const clash = ROOT_OWNS[album.slug];
+    if (!clash) continue;
+    throw new Error(
+      `public/tracks/albums.json declares the album "${album.slug}", but /${album.slug} ` +
+      `at the site root is not the album's to take: ${clash}. An album answers at its ` +
+      'own address there, so its slug has to be a word nothing else at the root is ' +
+      'named by. Rename the album, or take its page out of the root.',
+    );
+  }
+}

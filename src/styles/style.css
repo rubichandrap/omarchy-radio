@@ -236,9 +236,9 @@ a, button, [role="slider"] { -webkit-tap-highlight-color: transparent; }
 /* Where the listener count used to be. Those numbers counted a stream that
    no longer exists; this says what the deck is instead. */
 /* Where the listener count used to be, and now the way to send a song: the
-   line has always claimed every one of them arrived as a pull request, so it
-   may as well be the door. Dressed like the other link in this bar rather
-   than like a link, because it is a slogan first. */
+   line is the door to the contribution path, not a claim about where every
+   song here came from. Dressed like the other link in this bar rather than
+   like a link, because it is a slogan first. */
 .tagline {
   font-size: 10px;
   letter-spacing: .24em;
@@ -911,6 +911,15 @@ a, button, [role="slider"] { -webkit-tap-highlight-color: transparent; }
 .seg-b:hover { color: var(--fg); background: var(--rowHov); }
 .seg-b.is-on { color: var(--acFg); background: var(--ac); }
 
+/* The album selector: the seg's boxes and the seg's links, in a row of its
+   own under the panel head, because it grows with the index and the head
+   already holds the switch. It narrows the songs rather than being a third
+   list, so it is over them and nowhere else. */
+.albs {
+  margin: 0 20px 12px;
+  align-self: flex-start;
+}
+
 .tr-head[hidden], .tracks[hidden] { display: none; }
 
 .lyr-box {
@@ -1114,6 +1123,10 @@ a, button, [role="slider"] { -webkit-tap-highlight-color: transparent; }
   /* No slash key to press, and nothing to clear until something is typed. */
   .find-k { display: none; min-height: 44px; padding: 0 12px; }
   .find.has-q .find-k { display: inline-flex; align-items: center; }
+  /* A row of its own here, the width of the panel, with the albums sharing
+     it: a fingertip on each of them, whatever the index holds. */
+  .albs { margin: 0 16px 12px; align-self: stretch; }
+  .albs .seg-b { flex: 1; justify-content: center; }
 
   .bar { gap: 14px; }
   /* The tagline crowds the wordmark at this width, and it is a slogan. It is

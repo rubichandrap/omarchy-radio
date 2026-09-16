@@ -30,8 +30,9 @@ Full credit belongs to [omacom/radio.omarchy.org](https://github.com/omacom/radi
 
 | Feature | Status | Description |
 |---|---|---|
-| **Shuffle Mode** | Active | Walk a shuffled play order: every track once per cycle, a fresh draw each time |
-| **Repeat Modes** | Active | Cycle between Repeat Off, Repeat One (loop track), and Repeat All (loop playlist) |
+| **Shuffle Mode** | Active | Walk a shuffled play order: every track of the list that plays once per cycle, a fresh draw each time |
+| **Repeat Modes** | Active | Cycle between Repeat Off, Repeat One (loop track), and Repeat All (loop the list that plays) |
+| **Albums** | Active | The playlist is a set of albums; each answers at its own address (`/omarchy`, `/lofi`), the selector over the songs picks which one plays, and `all` is the whole playlist |
 | **Playback Queue** | In Progress | "Play Next" and "Add to Queue" actions without interrupting the current track |
 | **Custom Playlists** | In Progress | Create, manage, and switch between curated subsets of tracks |
 | **Terminal Theme Sync** | Active | Dynamic integration with desktop terminal colors (`colors.toml` via `omarchy-theme-sync`) |
@@ -51,7 +52,7 @@ This project is hosted on GitHub Pages:
 
 - **Station URL:** [https://rubichandrap.github.io/omarchy-radio/](https://rubichandrap.github.io/omarchy-radio/)
 - **Deployment Workflow:** Automated via GitHub Actions on push to `main` ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)).
-- **Static Output:** Astro builds individual static HTML files for every track (`/playlist/<slug>`) and podcast episode (`/podcast/<slug>`), serving clean extensionless URLs directly from GitHub Pages.
+- **Static Output:** Astro builds individual static HTML files for every track (`/playlist/<slug>`), podcast episode (`/podcast/<slug>`) and album (`/<album>`, e.g. `/omarchy`, `/lofi`), serving clean extensionless URLs directly from GitHub Pages.
 
 ---
 
@@ -92,7 +93,7 @@ npm run test:browser
 | `src/lib/lists.ts` | Track and podcast feed ingestion and schema definitions |
 | `src/lib/slug.ts` | URL slug derivation rule shared between build-time and runtime router |
 | `src/pages/` | Astro route definitions for permalink static pages |
-| `public/tracks/` | Audio files (`.mp3`) and `playlist.json` registry |
+| `public/tracks/` | `albums.json` and the albums: an audio-and-`playlist.json` directory each |
 | `public/stories/` | Mirrored podcast RSS feed (`feed.rss`) |
 
 For comprehensive technical specifications on design tokens and the dither lattice, see [`DESIGN.md`](DESIGN.md).
@@ -103,6 +104,15 @@ For comprehensive technical specifications on design tokens and the dither latti
 
 Tracks in this repository follow the Omarchy community guidelines:
 - **Created with AI:** Suno, Udio, local models, or custom pipelines. Prompting is writing—submissions must be original work within the Omarchy universe (Arch, Hyprland, dotfiles, Quattro, the terminal).
-- **Submission format:** Add an MP3 to `public/tracks/<artist-slug>-<title-slug>.mp3` and register the entry in `public/tracks/playlist.json`. Explicit tracks should be tagged accordingly.
+- **Submission format:** Add an MP3 to `public/tracks/<album>/<artist-slug>-<title-slug>.mp3` and register the entry in that album's `public/tracks/<album>/playlist.json`. The albums themselves are declared in `public/tracks/albums.json`. Explicit tracks should be tagged accordingly.
 - Detailed submission rules: [`public/tracks/README.md`](public/tracks/README.md).
 - Podcast feed mirroring rules: [`public/stories/README.md`](public/stories/README.md).
+
+---
+
+## Open Lo-Fi
+
+The `lofi` album is [Open Lo-Fi](https://github.com/btahir/open-lofi): 166
+instrumentals released into the public domain under CC0-1.0. The copies in this
+repository are 128 kbps transcodes; the original release is where the
+untranscoded set lives.

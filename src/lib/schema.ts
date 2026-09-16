@@ -89,25 +89,31 @@ export function playlistNode(tracks: Item[]) {
     url: `${CANON}/playlist`,
     numTracks: tracks.length,
     description:
-      'Songs about the Omarchy desktop, every one of them made by somebody who runs it.',
-    track: tracks.map((t, i) => ({
-      '@type': 'MusicRecording',
-      position: i + 1,
-      name: t.title,
-      url: `${CANON}/${t.key}`,
-      byArtist: { '@type': 'Person', name: t.artist || 'unknown' },
-    })),
+      "The community's songs about the Omarchy desktop, sent in as pull " +
+      'requests, and the public-domain Open Lo-Fi collection.',
+    track: tracks.map((t, i) => {
+      const node: Record<string, unknown> = {
+        '@type': 'MusicRecording',
+        position: i + 1,
+        name: t.title,
+        url: `${CANON}/${t.key}`,
+      };
+      // A song with no artist credits nobody: a Person called "unknown" is a
+      // name the file does not carry. Built and added to, the way
+      // episodeNode() below does it.
+      if (t.artist) node.byArtist = { '@type': 'Person', name: t.artist };
+      return node;
+    }),
   };
 }
 
 export function songNode(track: Item, path: string) {
-  return {
+  const node: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'MusicRecording',
     '@id': `${CANON}${path}#recording`,
     name: track.title,
     url: CANON + path,
-    byArtist: { '@type': 'Person', name: track.artist || 'unknown' },
     inPlaylist: { '@id': `${CANON}/playlist#playlist` },
     publisher: { '@id': ORG },
     isFamilyFriendly: !track.explicit,
@@ -117,6 +123,9 @@ export function songNode(track: Item, path: string) {
       encodingFormat: 'audio/mpeg',
     },
   };
+  // The one thing a song may not have, as in the playlist above.
+  if (track.artist) node.byArtist = { '@type': 'Person', name: track.artist };
+  return node;
 }
 
 export function seriesNode(episodes: Item[], home: string) {
