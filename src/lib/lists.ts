@@ -95,7 +95,15 @@ export function parseAlbums(index: AlbumIndex, dirs: AlbumDir[]): Item[] {
         `public/tracks/${album.slug}/playlist.json is not there.`,
       );
     }
-    flat.push(...parseTracks(dir.list, album.slug));
+    const songs = parseTracks(dir.list, album.slug);
+    if (!songs.length) {
+      throw new Error(
+        `public/tracks/${album.slug}/playlist.json names no songs, so the ` +
+        `album "${album.slug}" the index declares would play nothing. Add a ` +
+        'song to the album, or take its line out of the index.',
+      );
+    }
+    flat.push(...songs);
   }
 
   for (const { slug } of dirs) {
@@ -293,6 +301,7 @@ const ROOT_OWNS: Record<string, string> = {
 };
 
 export function checkAlbumSlugs(albums: Album[]): void {
+  const seen = new Set<string>();
   for (const album of albums) {
     /* The slug is the address, and the address is a path the build writes a
        page at: anything but the shape an address is (lower case, words joined
@@ -304,6 +313,16 @@ export function checkAlbumSlugs(albums: Album[]): void {
         'a-z, 0-9 and -. The slug is where the album answers, so it has to be one.',
       );
     }
+    /* A slug twice is a directory listed twice: the same songs, and the second
+       copy's addresses renamed behind the contributor's back. */
+    if (seen.has(album.slug)) {
+      throw new Error(
+        `public/tracks/albums.json declares the album "${album.slug}" twice, so its ` +
+        'songs would be listed twice and the second copy would answer somewhere ' +
+        'else. Keep one line per album.',
+      );
+    }
+    seen.add(album.slug);
     const clash = ROOT_OWNS[album.slug];
     if (!clash) continue;
     throw new Error(

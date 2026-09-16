@@ -24,6 +24,8 @@ only the lists in directories (a tracks folder of 199 MP3s).
 
 Consequences: the index and the directories are two facts that must agree, so
 the route test checks both directions — every declared album has a list, and
-every album directory is declared. In the browser, losing one album's fetch
+every album directory is declared — and the parse refuses the index's own
+sourness beside it: an album declared whose list names no songs, and a slug
+declared twice. In the browser, losing one album's fetch
 fails the whole load rather than serving half a playlist: the deck keeps the
 copy from the last visit and tries again on the next one.

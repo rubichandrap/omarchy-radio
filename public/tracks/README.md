@@ -54,8 +54,8 @@ shell's precache list in `public/sw.js` (one line, and its `VERSION` moves with
 it), or a cold offline visit has no rows for it, and the route suite holds the
 two together. The index and the directories are held to each other: a directory
 holding songs or a list that no line declares, a line with no `playlist.json`
-behind it, or a line with no directory at all, each is refused rather than
-playing nothing.
+behind it, a line with no directory at all, a list that names no songs, or a
+slug declared twice, each is refused rather than playing nothing.
 
 The slug is also where the album answers: `radio.omarchy.org/<slug>`, beside
 `/playlist`, with the album's rows and its own selector link. So it is lower

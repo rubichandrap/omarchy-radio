@@ -370,6 +370,9 @@ function albumRule(index, dirs) {
      'a directory holding a list nobody declares is refused');
   ok(refuses({ albums: [] }, [{ slug: 'stray' }]),
      'a directory holding songs and no list at all is refused');
+  ok(refuses({ albums: [{ slug: 'declared', name: 'Declared' }] },
+             [{ slug: 'declared', list: { tracks: [] } }]),
+     'a declared album whose list names no songs is refused');
   console.log(`  ${declared.length} albums declared, ${dirs.length} on disk, in agreement`);
 }
 
@@ -388,6 +391,8 @@ function albumRule(index, dirs) {
 function albumPlaceRule(albums) {
   const accepts = (a) => { try { checkAlbumSlugs(a); return true; } catch { return false; } };
   ok(accepts(albums), 'the index declares no album whose address the site root already owns');
+  ok(!accepts([{ slug: 'lofi', name: 'One' }, { slug: 'lofi', name: 'Two' }]),
+     'an album declared twice, under one slug, is refused');
   /* The words the root owns that are themselves shaped like an address: these
      are the ones the clash rule catches, and it says what it clashed with.
      A slug with a dot in it — sw.js, sitemap.xml — is refused for its shape
