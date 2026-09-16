@@ -1,16 +1,19 @@
 # Tracks
 
-The playlist for Omarchy Radio, and the whole of what the deck plays. Every
-track here is served straight from the repo, so adding one is a pull request.
+The playlist for Omarchy Radio, and the whole of what the deck plays. It is
+kept as albums: each album is a directory here holding its own list of songs,
+`playlist.json`, beside its own audio. Every track is served straight from the
+repo, so adding one is a pull request.
 
-The order in `playlist.json` is the order it plays in, from the top, round
-again at the end.
+`albums.json` declares the albums, in the order they are listed. An album's
+`playlist.json` is the order its songs play in, from the top, round again at
+the end.
 
 ## Add a track
 
-1. Drop your MP3 in this folder, named `artist-title.mp3` — lower case, words
-   joined by hyphens, nothing in it but `a-z`, `0-9` and `-`.
-2. Add an entry to `playlist.json`.
+1. Drop your MP3 in the album's directory, named `artist-title.mp3` — lower
+   case, words joined by hyphens, nothing in it but `a-z`, `0-9` and `-`.
+2. Add an entry to that album's `playlist.json`.
 3. Open a pull request.
 
 ```json
@@ -25,14 +28,32 @@ That is the whole entry. There is no id to invent and no count to bump. The
 song's own page — `radio.omarchy.org/playlist/<title>` — is written for you
 when the pull request lands, along with its card and its sitemap entry.
 
+## Albums
+
+The community's songs are the `omarchy` album, and the folders look like this:
+
+```
+tracks/
+  albums.json         the albums, in the order they are listed
+  omarchy/
+    playlist.json     the community's songs, in the order they play
+    dan-t-play-the-machine.mp3
+```
+
+An album is a directory and a line. To add one, make the directory, write its
+`playlist.json`, and add `{ "slug": "...", "name": "..." }` to `albums.json`
+where you want it in the list — `slug` is the directory's name, `name` is what
+the deck calls it. Nothing else declares it, and nothing checks it later: a
+directory nobody declared, or a declared album with no `playlist.json`, fails
+the build rather than playing nothing.
+
 ## Fields
 
 | field | required | notes |
 | --- | --- | --- |
 | `title` | yes | shown in the playlist and the marquee |
 | `artist` | yes | shown under the title |
-| `file` | yes | filename in this folder, exactly as on disk |
-| `album` | no | shown in place of the artist while playing |
+| `file` | yes | filename in the album's directory, exactly as on disk |
 | `url` | no | full URL for a track hosted elsewhere, used instead of `file` |
 | `explicit` | no | `true` shows an EXPLICIT badge beside the title |
 | `lyrics` | no | filename of the sheet in `lyrics/`, or `false` for none |
@@ -43,11 +64,11 @@ request title. The badge comes from the field, not from the filename.
 ## Why the filename is a slug
 
 `file` is a filename and also an address: the deck serves it from
-`radio.omarchy.org/tracks/<file>`. A name with a space, an accent or an
+`radio.omarchy.org/tracks/<album>/<file>`. A name with a space, an accent or an
 apostrophe in it works — the player encodes it, and it did for a long time —
 but it arrives as
-`/tracks/Aur%C3%A9lien%20-%20Omarchee%2C%20c'est%20la%20vie.mp3`, which is not
-a thing anybody can read, type, or paste into `mpv` without care.
+`/tracks/omarchy/Aur%C3%A9lien%20-%20Omarchee%2C%20c'est%20la%20vie.mp3`, which
+is not a thing anybody can read, type, or paste into `mpv` without care.
 
 So the file gets the same treatment an address gets. `artist-title.mp3`,
 through the same rule in [`src/lib/slug.ts`](../../src/lib/slug.ts) that turns
@@ -93,8 +114,8 @@ Without a sheet it says so and points here.
 - MP3, 320 kbps or lower. Keep it under 10 MB.
 - Your own creation, and set in the Omarchy universe. The [README](../README.md)
   covers what that means.
-- Order in `playlist.json` is the order in the player. New tracks go wherever
-  fits, the list is roughly alphabetical by artist.
+- Order in that album's `playlist.json` is the order in the player. New tracks
+  go wherever fits, the list is roughly alphabetical by artist.
 
 ## Check it before you push
 

@@ -7,7 +7,7 @@ read as one family.
 
 They are already tied together at the content level. The redesign's hero plays
 **"We Can Fix Everything (The Ultimate Machine)" by Kevin Koontz** — a track that
-lives in `public/tracks/playlist.json` in this repository — and `src/lib/music.ts`
+lives in `public/tracks/omarchy/playlist.json` in this repository — and `src/lib/music.ts`
 carries `radio: 'https://radio.omarchy.org/'`. The main site's front page is
 listening to this station. It should not look like a different project.
 

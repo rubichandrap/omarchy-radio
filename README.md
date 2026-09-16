@@ -92,7 +92,7 @@ npm run test:browser
 | `src/lib/lists.ts` | Track and podcast feed ingestion and schema definitions |
 | `src/lib/slug.ts` | URL slug derivation rule shared between build-time and runtime router |
 | `src/pages/` | Astro route definitions for permalink static pages |
-| `public/tracks/` | Audio files (`.mp3`) and `playlist.json` registry |
+| `public/tracks/` | `albums.json` and the albums: an audio-and-`playlist.json` directory each |
 | `public/stories/` | Mirrored podcast RSS feed (`feed.rss`) |
 
 For comprehensive technical specifications on design tokens and the dither lattice, see [`DESIGN.md`](DESIGN.md).
@@ -103,6 +103,6 @@ For comprehensive technical specifications on design tokens and the dither latti
 
 Tracks in this repository follow the Omarchy community guidelines:
 - **Created with AI:** Suno, Udio, local models, or custom pipelines. Prompting is writing—submissions must be original work within the Omarchy universe (Arch, Hyprland, dotfiles, Quattro, the terminal).
-- **Submission format:** Add an MP3 to `public/tracks/<artist-slug>-<title-slug>.mp3` and register the entry in `public/tracks/playlist.json`. Explicit tracks should be tagged accordingly.
+- **Submission format:** Add an MP3 to `public/tracks/<album>/<artist-slug>-<title-slug>.mp3` and register the entry in that album's `public/tracks/<album>/playlist.json`. The albums themselves are declared in `public/tracks/albums.json`. Explicit tracks should be tagged accordingly.
 - Detailed submission rules: [`public/tracks/README.md`](public/tracks/README.md).
 - Podcast feed mirroring rules: [`public/stories/README.md`](public/stories/README.md).
