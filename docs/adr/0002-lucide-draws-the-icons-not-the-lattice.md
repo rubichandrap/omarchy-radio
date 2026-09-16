@@ -24,5 +24,5 @@ Consequences: the icons are curves with round joins, so the lattice's "one
 kind of icon that cannot go blurry" argument dies with the table, and the icon
 section of DESIGN.md says so. The lattice stays what it is for the wordmark,
 the field and the meter. `src/lib/icons.ts` retires; the stylesheet keeps the
-face-flipping classes, so the two-state buttons change how they are drawn, not
-how they work.
+face-flipping classes, so a button that carries more than one face changes how
+it is drawn, not how it works.
