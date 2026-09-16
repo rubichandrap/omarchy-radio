@@ -37,6 +37,9 @@
      - an album is a place: every album answers at its own address at the site
        root with its rows, its title and its note, the selector over the songs
        marks the album the address names, and the numbers count within it
+     - an album is what plays: its songs are the play order while one is
+       chosen, picking one is a command, `all` is the whole playlist, and the
+       readout names the album the song playing came out of
      - the icons: Lucide drawings inline in the page, one size on the six
        buttons and one on the inline set, no lattice left under any of them
      - the two strips the buttons make: the transport, then shuffle and repeat
@@ -191,6 +194,9 @@ window.__state = function () {
     /* What the panel says it is showing, and the number the lit row wears. */
     panel: (document.getElementById('playlistName') || {}).textContent || '',
     rowNum: on ? ((on.querySelector('.tr-n') || {}).textContent || '') : '',
+    /* What the readout calls what is playing: the album while one of its
+       songs is, and the song's number in it. */
+    label: (document.getElementById('srcLabel') || {}).textContent || '',
     /* The album selector: whether it is over the list on screen at all, what
        it offers, and which of those it marks as the page being read. */
     albums: (function () {
@@ -504,9 +510,9 @@ async function find({ songs }) {
  * song's own page wears the number the deck gave it, not the one it happens
  * to have in the whole playlist.
  *
- * What plays is deliberately not this section's business: picking an album
- * changes what is on screen, the address and the numbering, and the playlist
- * goes on playing. */
+ * Picking an album is also a command — what plays is the album in view — and
+ * that is the next section's business. This one is about the place itself:
+ * the address, the rows, the numbering, and the selector that marks it. */
 async function albumsAtTheirAddresses({ songs, albums }) {
   section('an album is a place');
   const browser = await Browser.launch('no-user-gesture-required');
@@ -589,8 +595,8 @@ async function albumsAtTheirAddresses({ songs, albums }) {
     });
     if (!s) return;
     is(s.row, third.title, "the album's third row plays the third song of the album");
-    is(s.albums.current.join(','), 'all',
-       'and the address it wrote names a song and no album, so all is the one marked');
+    is(s.albums.current.join(','), album.name.toLowerCase(),
+       'and the album it is in stays the one in view, because it is what plays');
 
     /* Which is one step, and back takes it. */
     await tab.eval('history.back()');
@@ -645,6 +651,304 @@ async function albumsAtTheirAddresses({ songs, albums }) {
   } finally {
     await tab.close();
     await browser.close();
+  }
+}
+
+/* An album is what plays.
+ *
+ * The album in view is the list the deck walks: its songs are the play order
+ * while one is chosen, and the whole playlist otherwise — so the transport,
+ * shuffle and repeat are checked against the album, walking it, wrapping at
+ * its ends, and coming round again at its end. Picking one is a command as
+ * much as a place: an item outside the new album is replaced at once, an item
+ * inside it is not interrupted and the order is drawn around it, and a deck
+ * that is paused starts nothing. `all` is the whole playlist in the order the
+ * albums are declared, and the readout names the album while one of its songs
+ * is playing — the panel can be showing the other list.
+ *
+ * The last check is the gesture claim, and it is the one that wants a deck
+ * which was refused the sound: a press on an album link is a real pointer
+ * gesture, and what it starts has to be audible rather than silent. */
+async function albumsPlay({ songs, albums }) {
+  section('an album is what plays');
+  if (!ok(albums.length >= 2, 'the index declares two albums or more')) return;
+  const first = albums[0];
+  const last = albums[albums.length - 1];
+  const mine = songs.filter((s) => s.album === last.slug);
+  const other = songs.filter((s) => s.album === first.slug);
+  if (!ok(mine.length && other.length, 'both albums have songs')) return;
+
+  /* Which song a state is playing. The album's directory is part of the
+     address, so a file name alone would not say where it came from. */
+  const playingNow = (s) => songs.find((q) =>
+    decodeURIComponent(s.src).endsWith(`/tracks/${q.album}/${q.file}`));
+  /* What the readout should say while that song plays: the album it came
+     out of, and the number its row wears in it. */
+  const labelOf = (song, album) =>
+    album.name.toLowerCase() + ' · track ' +
+    (songs.filter((q) => q.album === album.slug).indexOf(song) + 1);
+
+  const browser = await Browser.launch('no-user-gesture-required');
+  const tab = await browser.tab();
+  try {
+    // ── arriving at an album's address starts that album ──
+    await tab.go(last.path);
+    let s = await until('the album to start by itself', async () => {
+      const st = await tab.state();
+      const p = playingNow(st);
+      return st.playing && st.at > 0 && st.rows === mine.length && p && p.album === last.slug
+        ? st : null;
+    });
+    if (!s) return;
+    is(s.path, last.path, "an album's address stays its own page");
+    is(playingNow(s).path, mine[0].path, 'the album starts itself, from its first track');
+    is(s.albums.current.join(','), last.name.toLowerCase(), 'with the album the one marked as read');
+    is(s.label, labelOf(mine[0], last), 'and the readout names the album it is playing');
+
+    // ── picking another album starts it, here and now ──
+    await tab.click(`#albs a[data-album="${first.slug}"]`);
+    s = await until('the other album to start', async () => {
+      const st = await tab.state();
+      const p = playingNow(st);
+      return st.playing && p && p.album === first.slug ? st : null;
+    });
+    if (!s) return;
+    is(s.sentinel, 1, 'the press is the deck’s, not a fresh document');
+    is(s.path, first.path, 'the album is the address the press names');
+    is(playingNow(s).path, other[0].path, 'and it starts at its first track');
+    is(s.label, labelOf(other[0], first), 'the readout names it while it plays');
+
+    // ── the transport walks the album, and wraps at its ends ──
+    await tab.click('#next');
+    s = await until("the album's next track", async () => {
+      const st = await tab.state();
+      const p = playingNow(st);
+      return p && p.path === other[1].path ? st : null;
+    });
+    if (!s) return;
+    is(s.path, first.path, 'next is the album walking, not the address moving');
+
+    await tab.click('#prev');
+    if (!await until('back on the first one', async () => {
+      const st = await tab.state();
+      const p = playingNow(st);
+      return p && p.path === other[0].path ? st : null;
+    })) return;
+
+    /* Back off the head and the album's own tail is where the deck lands.
+       The playlist's tail belongs to another album, so this wrap is the
+       album's and not the list's. */
+    await tab.click('#prev');
+    s = await until("the album's own tail", async () => {
+      const st = await tab.state();
+      const p = playingNow(st);
+      return p && p.path === other[other.length - 1].path ? st : null;
+    });
+    if (!s) return;
+    ok(other[other.length - 1].path !== songs[songs.length - 1].path,
+       "the album's tail is not the playlist's tail, so that wrap was the album's");
+
+    // ── repeat all brings the album round again, from its own head ──
+    is(s.repeat.label, 'Repeat mode: all', 'the deck is repeating the cycle');
+    const before = s.plays.length;
+    if (ok(await until('the album\'s last track to be runnable to its end',
+                       () => seekToEnd(tab), 15000, 200),
+           "the album's last track can be run to its end")) {
+      s = await until('the album to come round', async () => {
+        const st = await tab.state();
+        return st.plays.length > before ? st : null;
+      }, 15000);
+      if (s) is(playingNow(s).path, other[0].path,
+                "repeat all starts the album again: its own first track, not the playlist's next");
+    }
+
+    // ── shuffle permutes the album in view ──
+    await tab.click('#shuffle');
+    s = await until('shuffle on', async () => {
+      const st = await tab.state();
+      return st.shuffle.pressed === 'true' ? st : null;
+    });
+    if (!s) return;
+    ok(s.note.trim().startsWith(`${other.length} tracks`) && /shuffled/.test(s.note),
+       `the note counts the album and says the order is shuffled (${s.note.trim()})`);
+
+    const walked = [];
+    for (let i = 0; i < 4; i++) {
+      const was = walked.length ? walked[walked.length - 1] : s.rowHref;
+      await tab.click('#next');
+      const st = await until('another row of the album', async () => {
+        const now = await tab.state();
+        return now.rowHref && now.rowHref !== was ? now : null;
+      });
+      if (!st) return;
+      walked.push(st.rowHref);
+    }
+    const inAlbum = new Set(other.map((q) => q.path));
+    ok(walked.every((p) => inAlbum.has(p)),
+       `the cycle is that album's songs, not the playlist's (walked ${walked.join(', ')})`);
+    is(new Set(walked).size, walked.length, 'and it walks them without repeating one');
+
+    /* With shuffle on, an album picked away from what is playing opens on a
+       member of it: the head of a drawn cycle, which is only promised to be
+       a member and is picked by the deck, not by this check. */
+    const heard = (await tab.state()).plays.length;
+    await tab.click(`#albs a[data-album="${last.slug}"]`);
+    s = await until('the shuffled album to start', async () => {
+      const st = await tab.state();
+      return st.plays.length > heard ? st : null;
+    });
+    if (!s) return;
+    ok(playingNow(s).album === last.slug,
+       `it starts somewhere inside the album (${playingNow(s).title})`);
+    is(s.path, last.path, 'and the album is the address it was picked by');
+
+    await tab.click('#shuffle');
+    if (!await until('shuffle off', async () => {
+      const st = await tab.state();
+      return st.shuffle.pressed === 'false' ? st : null;
+    })) return;
+
+    // ── an item inside the album is not interrupted ──
+    await tab.click(`#tracks a.track[href="${mine[1].path}"]`);
+    s = await until("the album's second row to play", async () => {
+      const st = await tab.state();
+      const p = playingNow(st);
+      return p && p.path === mine[1].path ? st : null;
+    });
+    if (!s) return;
+    is(s.albums.current.join(','), last.name.toLowerCase(),
+       'a row pressed inside the album leaves the album what is in view');
+
+    const held = s.plays.length;
+    await tab.click(`#albs a[data-album="${last.slug}"]`);
+    s = await until('the album, picked again', async () => {
+      const st = await tab.state();
+      return st.path === last.path ? st : null;
+    });
+    if (!s) return;
+    is(s.plays.length, held, 'picking the album a song of it is already playing starts nothing');
+    is(playingNow(s).path, mine[1].path, 'and the song goes on playing');
+    is(s.label, labelOf(mine[1], last), 'the readout goes on naming the album');
+
+    await tab.click('#next');
+    s = await until('the album to walk on', async () => {
+      const st = await tab.state();
+      return st.plays.length > held ? st : null;
+    });
+    if (s) is(playingNow(s).path, mine[2].path,
+              "the order was drawn around it: the album's own next row is next");
+
+    // ── all is the whole playlist, in the order the albums are declared ──
+    await tab.click('#albs a[data-album=""]');
+    s = await until('the whole playlist', async () => {
+      const st = await tab.state();
+      return st.rows === songs.length && st.albums.current.join(',') === 'all' ? st : null;
+    });
+    if (!s) return;
+    is(playingNow(s).path, mine[2].path, 'and the song playing is not interrupted to show it');
+
+    /* The row after the last song of the first album is the first song of
+       the second: the declared order, walked. */
+    const tail = other[other.length - 1];
+    const after = songs[songs.indexOf(tail) + 1];
+    if (!ok(after && after.album === last.slug,
+            'the album declared after the first one is the second')) return;
+    await tab.click(`#tracks a.track[href="${tail.path}"]`);
+    if (!await until("the first album's last row", async () => {
+      const st = await tab.state();
+      const p = playingNow(st);
+      return p && p.path === tail.path ? st : null;
+    })) return;
+    const from = (await tab.state()).plays.length;
+    await tab.click('#next');
+    s = await until('the second album to follow', async () => {
+      const st = await tab.state();
+      return st.plays.length > from ? st : null;
+    });
+    if (s) is(playingNow(s).path, after.path,
+              'the first album runs into the second, in the order they are declared');
+
+    // ── the readout names the album with the other list on screen ──
+    await tab.click('#tabPodcast');
+    s = await until('the episodes', async () => {
+      const st = await tab.state();
+      return st.tab === 'tabPodcast' ? st : null;
+    });
+    if (s) {
+      is(s.label, labelOf(after, last), 'the readout goes on naming the album while the episodes are shown');
+      is(s.marquee, after.title, 'and the marquee is the song that is playing');
+    }
+    await tab.click('#tabSongs');
+    if (!await until('the songs', async () => {
+      const st = await tab.state();
+      return st.tab === 'tabSongs' ? st : null;
+    })) return;
+
+    // ── a deck that is paused starts nothing ──
+    await tab.click('#toggle');
+    s = await until('the deck to pause', async () => {
+      const st = await tab.state();
+      return st.playing === false ? st : null;
+    });
+    if (!s) return;
+    const quiet = s.plays.length;
+    await tab.click(`#albs a[data-album="${first.slug}"]`);
+    s = await until('the other album, silently', async () => {
+      const st = await tab.state();
+      return st.path === first.path && st.rows === other.length ? st : null;
+    });
+    if (!s) return;
+    is(s.plays.length, quiet, 'picking an album with the deck paused starts nothing');
+    is(s.playing, false, 'and nothing is playing');
+    is(s.row, other[0].title, "the deck stands at the album's head");
+    /* The row's cell is written by the deck's own pause event, which can land
+       after this repaint; wait for the word rather than reading the cell the
+       element is still owing. */
+    const halted = await until('the row to say it is paused', async () => {
+      const st = await tab.state();
+      return st.state === 'paused' ? st : null;
+    });
+    ok(halted, 'and the row says so');
+
+    await tab.click('#toggle');
+    s = await until('the album to start where it stands', async () => {
+      const st = await tab.state();
+      return st.plays.length > quiet ? st : null;
+    });
+    if (s) is(playingNow(s).path, other[0].path, "the next play starts the album from its head");
+  } finally {
+    await tab.close();
+    await browser.close();
+  }
+
+  /* ── the gesture claim: the press on an album link is audible ──
+     A deck the browser refused the sound is playing muted. The press is the
+     gesture that buys the album, and what it starts has to be the album,
+     audibly — not another silent play. It is also a browser of its own: the
+     suite's CDP port is one, so this one runs after the one above is closed
+     rather than beside it. */
+  const refused = await Browser.launch('user-gesture-required');
+  const quietTab = await refused.tab();
+  try {
+    await quietTab.go('/');
+    let q = await until('the deck to arrive playing muted', async () => {
+      const st = await quietTab.state();
+      return st.playing && st.at > 0 ? st : null;
+    });
+    if (!q) return;
+    is(q.muted, true, 'the arrival was refused the sound, so the deck plays muted');
+
+    await quietTab.click(`#albs a[data-album="${last.slug}"]`);
+    q = await until('the album to start audibly', async () => {
+      const st = await quietTab.state();
+      const p = playingNow(st);
+      return st.playing && st.muted === false && p && p.album === last.slug ? st : null;
+    }, 10000);
+    if (q) is(playingNow(q).path, mine[0].path,
+              'a real pointer press on the album link starts the album, and audibly');
+  } finally {
+    await quietTab.close();
+    await refused.close();
   }
 }
 
@@ -2089,6 +2393,7 @@ try {
   await autoplayRefused(site);
   await find(site);
   await albumsAtTheirAddresses(site);
+  await albumsPlay(site);
   await reveal(site);
   await artistless(site);
   await stalePlaylist(site);
