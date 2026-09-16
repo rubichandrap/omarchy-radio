@@ -8,8 +8,9 @@
  * There is no live stream. The playlist is the station: it starts itself on
  * arrival and walks its play order — the list's own, or a shuffled one —
  * coming round again at the end unless the repeat mode says otherwise. The
- * list it walks is the album in view when one is chosen, and the whole
- * playlist otherwise.
+ * list it walks is the one a play seated the deck in — the album whose song
+ * was pressed, or the whole playlist — and a look at another album leaves it
+ * alone.
  * Everything the deck plays is a file in this repo, which is why every one
  * of them has an address of its own.
  */
@@ -1198,9 +1199,9 @@ function play(src: string, mode: Mode, ti: number) {
    goes on meaning a song somebody picked. */
 function autostart(how?: How) {
   /* What starts is what the deck is showing: an album's address starts that
-     album the way the front page starts the whole playlist. This is also the
-     deck's first start — nothing has played yet — so the list played is the
-     one it is seated into. */
+     album the way the front page starts the whole playlist. Nothing is
+     standing — this is a start, not a resume — so the list on screen is the
+     one its playback is seated into. */
   S.playingAlbum = S.album;
   var l = playingScope();
   if (!l.length) { setStatus('nothing in the playlist'); return; }
