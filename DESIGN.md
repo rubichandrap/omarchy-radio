@@ -253,7 +253,7 @@ pixel background from an audio analyser. Nobody has to be talked into anything.
 | Reduced motion | draws, frozen at `t = 0` | does not draw |
 | Small labels | 3×5 pixel font | 9px uppercase, `.22em` tracking |
 | Readouts | none | VT323 |
-| Stack | React, Vite, Tailwind, shadcn | Astro, one stylesheet, one script |
+| Stack | React, Vite, Tailwind, shadcn | Astro, a bundled sheet plus a font sheet, one script |
 
 ---
 
@@ -535,7 +535,7 @@ compares the two rather than trusting them: it reads the properties out of
 `applyTheme()` itself, so the list of what to check is not a third copy to keep
 by hand either.
 
-## The icons were never being drawn by us
+## Icons come from Lucide
 
 The transport's glyphs — `▶` `◀◀` `■` `❙❙`, the two carets, the arrow on an
 outbound link — are all outside latin and latin-ext, which is the whole of
@@ -545,24 +545,52 @@ back to. `❙❙` (U+2759 MEDIUM VERTICAL BAR) is a particularly poor bet; `▶`
 `◀` are worse, being in Unicode's emoji set, where a phone is entitled to
 render the play button in colour.
 
-They are cells on a lattice now, in `src/lib/icons.ts`. That was not a style
-decision so much as the only one consistent with everything else here: the
-wordmark is a 15×15 bitmap of axis-aligned rects, the field is hard on-or-off
-cells, the meter is bricks, and omarchy.org's small labels are a 3×5 pixel
-font. A stepped triangle is the same material — and it is the one icon that
-cannot go blurry, because there is no curve in it to resolve. One cell to one
-CSS pixel with `shape-rendering="crispEdges"`, so the steps land on the grid.
+They were cells on a lattice for a while — `src/lib/icons.ts`, axis-aligned
+rects at one cell to one CSS pixel — kept for a reason consistent with
+everything else here: the wordmark is a 15×15 bitmap of axis-aligned rects, the
+field is hard on-or-off cells, the meter is bricks, and omarchy.org's small
+labels are a 3×5 pixel font. The material held; the reading did not. A stepped
+triangle at 12×10 px is a blob at button distance, and every control that came
+next was a drawing exercise.
 
-Two of them have two faces, and both are in the page with a class deciding
-which shows: rewriting a button's contents forty times a minute to say the
-same two things is work for nothing, and it keeps drawing out of the deck. The
-one icon the deck does draw is the caret on an episode's row, because the deck
-builds that row — and it draws it from the same table, the way the build and
-the browser share the slug rule.
+They are Lucide's now, through `@lucide/astro`, and `src/components/Icon.astro`
+is the whole of the mapping — a name the components call an icon by, and the
+drawing that name is. The build renders them: inline svg, stroked
+in `currentColor` at the size the context calls for, 18px on the six buttons
+so none of them weighs more than another and 12px on the ones that sit in a
+line of text. One package is the only source — nothing vendored, no icon font
+or sprite in the load — and a name with no mapping fails the build rather than
+rendering an empty box.
 
-Prev and next are two triangles rather than a bar and one. A disc player marks
-skip with the bar; a tape deck marks it with the pair, and this deck has a
-tape on its readout.
+The repeat button is the one control that wears a face per mode — Lucide's
+`repeat-off`, `repeat`, and `repeat-1`, one for each of its three — so the
+mode is seen rather than remembered.
+
+The six buttons read as two groups. The four that drive playback — previous,
+play/pause, stop, next — are one strip; shuffle and repeat, the two that hold a
+setting rather than make a press, are another, 8px off it, each closed by its
+own border. Below 900px the two still take one row, the gap intact, and the
+buttons fill the width.
+
+And a mode control that is on is filled the way the play button is filled:
+accent ground, the accent's own ink, the bright accent under the pointer. Off
+is the plain outline every button wears. So "on" reads the same way twice on
+the deck, and shuffle — which Lucide has no off face for — says its state with
+the fill and its accessible name rather than with a glyph.
+
+The deck draws nothing at all. The one icon it needs at runtime — the caret on
+an episode's row, because the deck builds that row — is markup the build
+rendered into the panel (`#rowCaret`) and the deck copies in, the way the build
+and the browser share the slug rule. Both faces are in the markup and the row's
+class decides which shows, the same trade the play button's faces make.
+
+Two consequences. The icons are curves with round joins now, so the lattice's
+argument — the one kind of icon that cannot go blurry — goes with the table,
+and the lattice stays what it is for the wordmark, the field and the meter. And
+prev and next are still the pair of triangles rather than a bar and one: a disc
+player marks skip with the bar, a tape deck marks it with the pair, this deck
+has a tape on its readout, and Lucide's `rewind` and `fast-forward` are the
+pair.
 
 ## Why the deck plays through a <video>
 

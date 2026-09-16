@@ -30,8 +30,15 @@
      - the last track runs into the first one
      - the repeat modes: `one` plays a finished item again from the top, `off`
        stops at the end of the play order and the next play starts from its head
+     - the repeat button's faces: one per mode, flipped with the mode, and the
+       mode's own face after a reload
      - the shuffle order: a permutation of the list walked one row at a time,
        a new cycle opened on a different row, and the deck it survives
+     - the icons: Lucide drawings inline in the page, one size on the six
+       buttons and one on the inline set, no lattice left under any of them
+     - the two strips the buttons make: the transport, then shuffle and repeat
+       8px off, sharing one row on a narrow screen, and a setting that is on
+       painted the way the play button is painted
 */
 
 import { spawn } from 'node:child_process';
@@ -690,6 +697,313 @@ async function repeatModes({ songs }) {
   }
 }
 
+/* The repeat button's faces, one per mode. `all` is the face the page lands
+   in and the one the button wears until the deck says otherwise; `off` and
+   `one` are the modes the deck flips a class for. So what is checked is which
+   of the three faces the browser is showing, and that the pressing state and
+   the accessible name belong to the same mode the face does. The icon probe
+   is the icons section's, further down. */
+async function repeatFaces() {
+  section('the repeat button\'s three faces');
+  const browser = await Browser.launch('no-user-gesture-required');
+  const tab = await browser.tab();
+  try {
+    // The probe goes with the document it was installed in.
+    const go = async (path) => { await tab.go(path); await tab.eval(ICON_PROBE); };
+    const face = async () => (await tab.eval('window.__icon("#repeat")') || [])
+      .filter((i) => i.shown);
+    const wears = async (name) => {
+      const f = await face();
+      return f.length === 1 && has(f[0], name);
+    };
+
+    await go('/playlist');
+    let s = await until('the deck to own the playlist', async () => {
+      const st = await tab.state();
+      return st.playing && st.at > 0 ? st : null;
+    });
+    if (!s) return;
+
+    const faces = await tab.eval('window.__icon("#repeat")');
+    is(faces.length, 3, 'the button carries a face for each of its three modes');
+    ok(await wears('lucide-repeat'), 'the deck arrives in all, wearing the repeat face');
+
+    // ── one: the face is the mode, not a colour ──
+    await tab.click('#repeat');
+    s = await until('the mode to become one', async () => {
+      const st = await tab.state();
+      return st.repeat.label === 'Repeat mode: one' ? st : null;
+    });
+    if (s) {
+      ok(await wears('lucide-repeat-1'), 'one wears the repeat-1 face');
+      is(s.repeat.pressed, 'true', 'and the button says the mode is on');
+    }
+
+    // ── off: the face says the cycle will not come round again ──
+    await tab.click('#repeat');
+    s = await until('the mode to become off', async () => {
+      const st = await tab.state();
+      return st.repeat.label === 'Repeat mode: off' ? st : null;
+    });
+    if (s) {
+      ok(await wears('lucide-repeat-off'), 'off wears the repeat-off face');
+      is(s.repeat.pressed, 'false', 'and the button says the mode is off');
+    }
+
+    /* A reload is where the kept mode is read: the face has to be the one the
+       mode the deck comes up in belongs to, not the one the last press left
+       behind. */
+    await go('/playlist');
+    s = await until('the kept mode to come back', async () => {
+      const st = await tab.state();
+      return st.repeat.label === 'Repeat mode: off' ? st : null;
+    });
+    if (s) ok(await wears('lucide-repeat-off'), 'a reload comes up on the off face');
+
+    // ── R walks the ring the button walks, and the face follows it ──
+    await tab.eval(`document.body.dispatchEvent(new KeyboardEvent('keydown',
+      { key: 'r', code: 'KeyR', bubbles: true, cancelable: true }))`);
+    s = await until('R to cycle the mode', async () => {
+      const st = await tab.state();
+      return st.repeat.label === 'Repeat mode: all' ? st : null;
+    });
+    if (s) ok(await wears('lucide-repeat'), 'R cycles to all, and the repeat face is back');
+  } finally {
+    await tab.close();
+    await browser.close();
+  }
+}
+
+/* The six controls read as two groups, and the two that hold a setting read
+   as settings: shuffle and repeat in a strip of their own, 8px off the
+   transport's, and "on" a fill — the accent ground and the accent's own ink —
+   rather than a glyph that changed colour.
+
+   Neither is in the markup, so this reads what the browser decided: the boxes,
+   because a gap is only where two of them are, and the computed style,
+   because a fill is what came out for a button that says it is pressed. Hover
+   is driven through the pointer, the only thing that makes it true. The play
+   button was filled before any of this, so it is checked for not having
+   moved. */
+const CONTROL_PROBE = `window.__css = function (name) {
+  var d = document.createElement('div');
+  d.style.color = 'var(' + name + ')';
+  document.body.appendChild(d);
+  var v = getComputedStyle(d).color;
+  d.parentNode.removeChild(d);
+  return v;
+};
+window.__box = function (sel) {
+  var el = document.querySelector(sel);
+  if (!el) return null;
+  var r = el.getBoundingClientRect();
+  var cs = getComputedStyle(el);
+  return {
+    left: r.left, right: r.right, top: r.top, bottom: r.bottom,
+    w: r.width, h: r.height,
+    /* The width the stylesheet asked for: a rect on this canvas comes back
+       multiplied by the fit, a computed width does not. */
+    cw: parseFloat(cs.width),
+    bl: parseFloat(cs.borderLeftWidth), br: parseFloat(cs.borderRightWidth),
+    bg: cs.backgroundColor, fg: cs.color, edge: cs.borderTopColor
+  };
+};`;
+
+async function controlGroups() {
+  section('the mode controls, in a strip of their own');
+  const browser = await Browser.launch('no-user-gesture-required');
+  const tab = await browser.tab();
+  try {
+    await tab.go('/playlist');
+    const booted = await until('the deck to own the playlist', async () => {
+      const st = await tab.state();
+      return st.playing && st.at > 0 ? st : null;
+    });
+    if (!booted) return;
+    await tab.eval(CONTROL_PROBE);
+
+    /* Transport first, then the two that hold a setting: read in this order,
+       the gaps between neighbours are the whole of the grouping. */
+    const BUTTONS = ['#prev', '#toggle', '#stop', '#next', '#shuffle', '#repeat'];
+    const box = (sel) => tab.eval(`window.__box(${JSON.stringify(sel)})`);
+    const row = async () => {
+      const out = {};
+      for (const sel of BUTTONS) out[sel] = await box(sel);
+      return out;
+    };
+    const vars = await tab.eval(`['--ac', '--acHi', '--acFg', '--bd']
+      .reduce(function (o, n) { o[n] = window.__css(n); return o; }, {})`);
+    // What an unfilled button's ground computes to.
+    const CLEAR = 'rgba(0, 0, 0, 0)';
+    const gap = (before, after, r) => Math.round(r[after].left - r[before].right);
+
+    let b = await row();
+    if (ok(BUTTONS.every((sel) => b[sel]), 'every button has a box')) {
+      is(gap('#prev', '#toggle', b), -1, 'the transport buttons share their borders');
+      is(gap('#toggle', '#stop', b), -1, 'stop stays with the transport');
+      is(gap('#stop', '#next', b), -1, 'and the four are one strip');
+      is(gap('#shuffle', '#repeat', b), -1, 'shuffle and repeat share a strip of their own');
+      is(gap('#next', '#shuffle', b), 8, 'which stands 8px off the transport');
+      is(b['#prev'].bl, 1, 'the transport is closed by its own border');
+      is(b['#repeat'].br, 1, 'and the mode strip by its');
+      ok(BUTTONS.every((sel) => Math.round(b[sel].top) === Math.round(b['#prev'].top)),
+         'and all six buttons sit on one row');
+      is(Math.round(b['#shuffle'].w), Math.round(b['#prev'].w),
+         'a mode control is the width of a transport button');
+      ok(BUTTONS.every((sel) => Math.round(b[sel].w) === Math.round(b['#prev'].w)),
+         'and the six buttons are one width, the play button included');
+    }
+
+    /* The pointer, put on a control and taken off it again. What a hovered
+       button paints is computed a frame after the move, so a check waits for
+       the paint rather than reading it in the same tick. */
+    const hover = (sel, on) => tab.send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved', button: 'none',
+      x: Math.round(on ? (b[sel].left + b[sel].right) / 2 : 4),
+      y: Math.round(on ? (b[sel].top + b[sel].bottom) / 2 : 4),
+    });
+    const settle = (sel, prop, want) => until(`${sel} to paint ${prop} ${want}`,
+      async () => {
+        const st = await box(sel);
+        return st && st[prop] === want ? st : null;
+      }, 2500);
+    /* A press leaves the pointer on the button, and a button under the
+       pointer paints its hover, so the pointer is taken off again before
+       what the press left behind is read. */
+    const press = async (sel) => { await tab.click(sel); await hover(sel, false); };
+
+    /* ── off is the plain outline, and the pointer keeps the accent border ── */
+    is(b['#shuffle'].bg, CLEAR, 'shuffle arrives as the plain outline');
+    is(b['#shuffle'].edge, vars['--bd'], "with the deck's line for a border");
+    await hover('#shuffle', true);
+    is(((await settle('#shuffle', 'edge', vars['--ac'])) || {}).edge, vars['--ac'],
+       'an outline control takes the accent border under the pointer');
+    is((await box('#shuffle')).bg, CLEAR, 'and stays unfilled while it is off');
+    await hover('#shuffle', false);
+
+    /* ── on is a fill, which is how the play button already says it ── */
+    await press('#shuffle');
+    if (await until('shuffle to come on', async () =>
+        (await tab.state()).shuffle.pressed === 'true' ? true : null)) {
+      b = await row();
+      is(b['#shuffle'].bg, vars['--ac'], 'shuffle on computes the accent ground, as play does');
+      is(b['#shuffle'].fg, vars['--acFg'], "and its icon takes the accent's own ink");
+      await hover('#shuffle', true);
+      is(((await settle('#shuffle', 'bg', vars['--acHi'])) || {}).bg, vars['--acHi'],
+         'a filled control takes the bright accent under the pointer');
+      await hover('#shuffle', false);
+      await press('#shuffle');
+      if (await until('shuffle to go off', async () =>
+          (await tab.state()).shuffle.pressed === 'false' ? true : null)) {
+        is((await box('#shuffle')).bg, CLEAR, 'and off goes back to the plain outline');
+      }
+    }
+
+    /* ── repeat lands in `all`: a mode that is on, so a button that is filled ── */
+    b = await row();
+    is(b['#repeat'].bg, vars['--ac'], 'repeat all is filled');
+    is(b['#repeat'].fg, vars['--acFg'], 'with the accent ink on its face');
+    await press('#repeat');
+    if (await until('the mode to become one', async () =>
+        (await tab.state()).repeat.label === 'Repeat mode: one' ? true : null)) {
+      is((await box('#repeat')).bg, vars['--ac'], 'repeat one is on, so it is filled too');
+      await hover('#repeat', true);
+      is(((await settle('#repeat', 'bg', vars['--acHi'])) || {}).bg, vars['--acHi'],
+         'and it takes the bright accent under the pointer, as shuffle does');
+      await hover('#repeat', false);
+    }
+    await press('#repeat');
+    if (await until('the mode to become off', async () =>
+        (await tab.state()).repeat.label === 'Repeat mode: off' ? true : null)) {
+      is((await box('#repeat')).bg, CLEAR, 'repeat off is the plain outline');
+      await hover('#repeat', true);
+      is(((await settle('#repeat', 'edge', vars['--ac'])) || {}).edge, vars['--ac'],
+         'and under the pointer it keeps the accent border, not a fill');
+      is((await box('#repeat')).bg, CLEAR, 'with nothing filled behind it');
+      await hover('#repeat', false);
+    }
+
+    /* The play button is the one that was already filled, so what is checked
+       is that the fill it has is still the fill it had — playing or paused. */
+    b = await row();
+    is(b['#toggle'].bg, vars['--ac'], 'the play button is filled while it plays');
+    is(b['#toggle'].fg, vars['--acFg'], 'in the accent ink');
+    await hover('#toggle', true);
+    is(((await settle('#toggle', 'bg', vars['--acHi'])) || {}).bg, vars['--acHi'],
+       'the play button takes the bright accent under the pointer, as it did');
+    await hover('#toggle', false);
+    await press('#toggle');
+    if (await until('the deck to pause', async () =>
+        (await tab.state()).playing === false ? true : null)) {
+      is((await box('#toggle')).bg, vars['--ac'], 'and it looks the same paused as playing');
+      is((await box('#toggle')).fg, vars['--acFg'], 'the ink is the accent ink in both of its states');
+    }
+
+    /* ── and on a narrow screen the two strips share the row ── */
+    const wide = b;
+    await tab.send('Emulation.setDeviceMetricsOverride',
+                   { width: 800, height: 900, deviceScaleFactor: 1, mobile: false });
+    const narrow = await until('the controls to lay out for a narrow screen', async () => {
+      const st = await box('#prev');
+      return st && Math.round(st.w) !== Math.round(wide['#prev'].w) ? st : null;
+    });
+    if (narrow) {
+      const n = await row();
+      ok(BUTTONS.every((sel) => Math.round(n[sel].top) === Math.round(n['#prev'].top)),
+         'the two strips stay on one row');
+      ok(BUTTONS.every((sel) => Math.round(n[sel].w) === Math.round(n['#prev'].w)),
+         'and one width each, the play button included');
+      is(gap('#next', '#shuffle', n), 8, 'and keep their 8px between them');
+      const strip = await box('.tbtns');
+      ok(Math.round(n['#prev'].left) === Math.round(strip.left) &&
+         Math.round(n['#repeat'].right) === Math.round(strip.right),
+         'the buttons fill the width, both strips of them');
+
+      /* At 900px the rule still takes the pixel with it — `max-width: 900px` —
+         so what is asserted here is the narrow layout at its own last pixel,
+         which is why the wait below sees the buttons stretched and not the
+         desktop 44px. One pixel up, the rule lets go, and that is the check
+         that the edge is the rule's and not just a wider viewport. */
+      await tab.send('Emulation.setDeviceMetricsOverride',
+                     { width: 900, height: 900, deviceScaleFactor: 1, mobile: false });
+      const edge = await until('the controls to lay out at 900px', async () => {
+        const st = await box('#prev');
+        return st && Math.round(st.w) > Math.round(narrow.w) ? st : null;
+      });
+      if (edge) {
+        const e = await row();
+        ok(BUTTONS.every((sel) => Math.round(e[sel].top) === Math.round(e['#prev'].top)),
+           'at 900px, the narrow rule\'s own last pixel, the two strips are one row still');
+        is(gap('#next', '#shuffle', e), 8, 'with the 8px seam held there too');
+        ok(Math.round(e['#prev'].w) !== 44, 'and the strip still stretched, not the desktop width');
+      }
+
+      await tab.send('Emulation.setDeviceMetricsOverride',
+                     { width: 901, height: 900, deviceScaleFactor: 1, mobile: false });
+      const over = await until('the controls to lay out at 901px', async () => {
+        const st = await box('#prev');
+        return st && Math.round(st.cw) === 44 ? st : null;
+      });
+      if (over) {
+        const o = await row();
+        /* A rect on the scaled canvas comes back multiplied by the fit, the
+           computed width does not; the ratio is what puts the seam back in
+           the units the stylesheet drew it in. */
+        const scale = over.w / over.cw;
+        ok(BUTTONS.every((sel) => Math.round(o[sel].cw) === 44),
+           'at 901px the rule lets go: every button is back to the desktop 44px');
+        is(Math.round(gap('#next', '#shuffle', o) / scale), 8, 'and the two strips keep their 8px');
+        ok(BUTTONS.every((sel) => Math.round(o[sel].top) === Math.round(o['#prev'].top)),
+           'on one row');
+      }
+    }
+    await tab.send('Emulation.clearDeviceMetricsOverride');
+  } finally {
+    await tab.close();
+    await browser.close();
+  }
+}
+
 /* Shuffle is the order the deck walks, and an order is only visible by
    walking it: the section turns it on mid-list, then reads the lit row off
    the page for every step of the rest of the cycle. What it checks is the
@@ -1305,8 +1619,12 @@ async function offline({ songs }) {
   const tab = await browser.tab();
   try {
     await tab.go('/');
+    /* The worker's own file is named from the site's base, so a build made
+       under another base 404s it here and no registration is ever installed —
+       and `navigator.serviceWorker.ready` never settles without one, so
+       awaiting it is what used to take the whole run down with it instead of
+       failing this one check. The reload is what a second visit does. */
     const ready = await until('the service worker to take over', async () => {
-      await tab.eval('navigator.serviceWorker.ready.then(function () {})');
       return tab.eval('!!navigator.serviceWorker.controller || (location.reload(), false)');
     }, 15000, 500);
     if (!ok(ready, 'the service worker is registered and controlling the page')) return;
@@ -1359,6 +1677,148 @@ async function offline({ songs }) {
   }
 }
 
+/* The icons, in the page and from Lucide.
+ *
+ * What this replaces drew cells: axis-aligned rects at one to one CSS pixel,
+ * with shape-rendering="crispEdges" to hold the steps on the grid. So the
+ * question is not whether there is an svg — there always was — but that every
+ * icon is a stroked Lucide drawing at the size its context calls for, that no
+ * lattice is left under any of them, and that the caret on an episode's row
+ * is markup the build rendered rather than something the deck drew.
+ */
+const ICON_PROBE = `window.__icon = function (sel) {
+  var el = document.querySelector(sel);
+  if (!el) return null;
+  return Array.prototype.map.call(el.querySelectorAll('svg'), function (s) {
+    var box = s.getBoundingClientRect();
+    var rect = s.querySelector('rect');
+    return {
+      cls: s.getAttribute('class') || '',
+      w: Math.round(box.width),
+      h: Math.round(box.height),
+      shown: box.width > 0 && box.height > 0,
+      fill: s.getAttribute('fill') || '',
+      stroke: s.getAttribute('stroke') || '',
+      crisp: s.hasAttribute('shape-rendering'),
+      drawn: s.querySelectorAll('path, circle, ellipse, line, polyline, polygon, rect').length,
+      rounded: !!(rect && (rect.getAttribute('rx') || rect.getAttribute('ry'))),
+      uses: s.querySelectorAll('use').length
+    };
+  });
+};
+window.__icons = function () {
+  return Array.prototype.map.call(document.querySelectorAll('svg.i'), function (s) {
+    return {
+      cls: s.getAttribute('class') || '',
+      crisp: s.hasAttribute('shape-rendering'),
+      uses: s.querySelectorAll('use').length
+    };
+  });
+};`;
+
+const has = (icon, name) => icon.cls.split(' ').includes(name);
+
+async function icons({ songs, eps }) {
+  section('the icons, from Lucide');
+  const browser = await Browser.launch('no-user-gesture-required');
+  const tab = await browser.tab();
+  try {
+    // The probe goes with the document it was installed in, so every
+    // navigation in this section has to put it back.
+    const go = async (path) => { await tab.go(path); await tab.eval(ICON_PROBE); };
+    await go('/playlist');
+
+    // One control's faces: the two-state buttons carry both in the page, so
+    // every check here is about the one the browser is showing.
+    const face = async (sel) => (await tab.eval(`window.__icon(${JSON.stringify(sel)})`) || [])
+      .filter((i) => i.shown);
+    const size = (i) => `${i.w}x${i.h}`;
+
+    /* The deck plays on arrival, and paints the button it does that with in
+       the same pass as the row state — so this waits for the deck, not for
+       the browser's audio, which starts a paint earlier. */
+    const s = await until('the deck to own the playlist', async () => {
+      const st = await tab.state();
+      if (!(st.playing && st.rows >= songs.length)) return null;
+      const t = await face('#toggle');
+      return t.length === 1 && has(t[0], 'lucide-pause') ? st : null;
+    });
+    if (!s) return;
+
+    /* The six buttons. One size across them, so no button weighs more than
+       another; the play button is filled and shows its pause face, because
+       the deck has been playing since it booted. */
+    for (const [sel, name] of [['#prev', 'lucide-rewind'], ['#toggle', 'lucide-pause'],
+                               ['#stop', 'lucide-square'], ['#next', 'lucide-fast-forward'],
+                               ['#shuffle', 'lucide-shuffle'], ['#repeat', 'lucide-repeat']]) {
+      const shown = await face(sel);
+      if (!ok(shown.length === 1, `${sel} shows one icon, not ${shown.length}`)) continue;
+      const i = shown[0];
+      ok(has(i, name), `${sel} is ${name}, not ${i.cls.split(' ').join(' ')}`);
+      is(size(i), '18x18', `${sel}'s icon is 18px on the button`);
+      ok(i.fill === 'none' && i.stroke === 'currentColor',
+         `${sel}'s icon is a stroke in the button's colour (fill ${i.fill}, stroke ${i.stroke})`);
+      ok(!i.crisp && i.drawn > 0, `${sel}'s icon is drawn, not a lattice cell`);
+      is(i.uses, 0, `${sel}'s icon is inline, not a reference to a sprite`);
+    }
+
+    /* And the inline set: the two list glyphs, the caret on the theme menu,
+       the arrow that says a link leaves the site. */
+    for (const [sel, name] of [['#tabSongs', 'lucide-music-2'], ['#tabPodcast', 'lucide-mic'],
+                               ['#themeCaret', 'lucide-chevron-down'], ['.home', 'lucide-arrow-up-right']]) {
+      const shown = await face(sel);
+      if (!ok(shown.length === 1, `${sel} shows one icon, not ${shown.length}`)) continue;
+      const i = shown[0];
+      ok(has(i, name), `${sel} is ${name}, not ${i.cls.split(' ').join(' ')}`);
+      is(size(i), '12x12', `${sel}'s icon is the inline size`);
+    }
+
+    /* Stop is Lucide's square, and its corner is round: the one shape that
+       would still pass for a lattice cell if the answer were "rects". */
+    const stop = (await face('#stop'))[0];
+    if (stop) ok(stop.drawn === 1 && stop.rounded,
+                 'stop is one rounded rect, which is a Lucide drawing and not a cell');
+
+    /* The one icon the deck used to draw for itself: an episode's row caret.
+       It is markup the build rendered (#rowCaret), copied into the row, and
+       the row's class says which of its two faces shows. A page for an
+       episode opens that episode's panel, so the first press closes it. */
+    await go(eps[0].path);
+    const ep = await until('the episode to open', async () => {
+      const st = await tab.state();
+      if (st.row !== eps[0].title) return null;
+      const f = await face('.tr-c');
+      return f.length === 1 && has(f[0], 'lucide-chevron-down') ? st : null;
+    });
+    ok(ep, 'an open episode row points down, at the panel it opened');
+    if (ep) {
+      const faces = await tab.eval('window.__icon(".tr-c")');
+      is(faces.length, 2, 'both caret faces are in the row, and the row picks one');
+      is(size((await face('.tr-c'))[0]), '12x12', 'the row caret is the inline size');
+      await tab.click('#tracks li.is-on a.track');
+      const closed = await until('the row to close', async () => {
+        const f = await face('.tr-c');
+        return f.length === 1 && has(f[0], 'lucide-chevron-right') ? f : null;
+      });
+      ok(closed, 'pressing the row flips the caret to the face that points sideways');
+    }
+
+    // The same icons on a page that names nothing: there is one deck.
+    await go('/');
+    const front = await until('the front page to play', async () => {
+      const f = await face('#toggle');
+      return f.length === 1 && has(f[0], 'lucide-pause') ? f : null;
+    });
+    ok(front, 'the front page ships the same transport');
+    const all = await tab.eval('window.__icons()');
+    ok(all.length > 0 && all.every((i) => has(i, 'lucide') && !i.crisp && !i.uses),
+       `every icon on the page is a Lucide drawing (${all.length} of them)`);
+  } finally {
+    await tab.close();
+    await browser.close();
+  }
+}
+
 /* ── go ──────────────────────────────────────────────────────────────── */
 const server = serve();
 let code = 1;
@@ -1370,12 +1830,15 @@ try {
   console.log(`${site.songs.length} songs, ${site.eps.length} episodes`);
   await autoplayAllowed(site);
   await repeatModes(site);
+  await repeatFaces();
+  await controlGroups();
   await shuffleOrder(site);
   await autoplayRefused(site);
   await find(site);
   await reveal(site);
   await stalePlaylist(site);
   await desktopTheme();
+  await icons(site);
   await offline(site);
   console.log(`  ${passed - mark} checks`);
   console.log(`\n${passed} checks passed`);

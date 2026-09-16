@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Renders tools/og.html to the social cards in public/assets/images/.
 # Needs chromium, and python3 to serve the fonts the card pulls through
-# src/styles/fonts.css.
+# assets/fonts/fonts.css.
 #
 # It renders against dist/, with the card copied in beside the built site, so
-# the faces it draws with are the ones the site ships and the absolute
-# /assets/fonts/ paths in fonts.css resolve. Run npm run build first.
+# the faces it draws with are the ones the site ships: the card links the
+# stylesheet where dist already has it, and its bare-filename urls resolve
+# beside it. Run npm run build first.
 #
 #   opengraph.png         1200x630   og:image, twitter:image
 #   opengraph-16x9.png    1200x675   schema.org image
@@ -35,17 +36,14 @@ fi
 
 tmp="$(mktemp -d)"
 
-# The card, and the one stylesheet it names, sitting where the built site's
-# own /assets/fonts/ paths resolve. Removed again on the way out, so a render
-# cannot leave a page behind in what gets deployed.
+# The card, pointed at the stylesheet dist already serves. Removed again on
+# the way out, so a render cannot leave a page behind in what gets deployed.
 card="$dist/.og-card.html"
-sheet="$dist/.og-fonts.css"
-sed 's#\.\./src/styles/fonts\.css#/.og-fonts.css#' "$root/tools/og.html" > "$card"
-cp "$root/src/styles/fonts.css" "$sheet"
+sed 's#\.\./public/assets/fonts/fonts\.css#/assets/fonts/fonts.css#' "$root/tools/og.html" > "$card"
 
 python3 -m http.server "$port" --bind 127.0.0.1 --directory "$dist" >/dev/null 2>&1 &
 server=$!
-trap 'kill "$server" 2>/dev/null || true; rm -rf "$tmp" "$card" "$sheet"' EXIT
+trap 'kill "$server" 2>/dev/null || true; rm -rf "$tmp" "$card"' EXIT
 
 base="http://127.0.0.1:$port/.og-card.html"
 

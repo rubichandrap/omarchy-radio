@@ -16,7 +16,6 @@ import Foot from '../components/Foot.astro';
 import Noscript from '../components/Noscript.astro';
 import type { Item, Show } from '../lib/item.ts';
 import type { Kind } from '../lib/slug.ts';
-import '../styles/fonts.css';
 import '../styles/style.css';
 
 interface Props {
@@ -82,6 +81,11 @@ const seedJson = seed ? JSON.stringify(seed).replace(/</g, '\\u003c') : '';
 <link rel="icon" href={`${BASE}/assets/images/favicon-32.png`} sizes="32x32" type="image/png" />
 <link rel="apple-touch-icon" href={`${BASE}/assets/images/apple-touch-icon.png`} />
 <link rel="manifest" href={`${BASE}/site.webmanifest`} />
+
+{/* The @font-face rules, which name the files beside them. Linked rather than
+    bundled so those names — bare filenames, resolved against the sheet —
+    hold in dev as they do in the build. */}
+<link rel="stylesheet" href={`${BASE}/assets/fonts/fonts.css`} />
 
 <link rel="preload" href={`${BASE}/assets/fonts/jetbrains-mono-latin.woff2`} as="font" type="font/woff2" crossorigin />
 <link rel="preload" href={`${BASE}/assets/fonts/vt323-latin.woff2`} as="font" type="font/woff2" crossorigin />

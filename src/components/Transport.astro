@@ -2,19 +2,22 @@
 /* The controls. These stay ordinary DOM: a shader that moves a button's
  * picture without moving its hit box is a button that misses.
  *
- * The play button carries both faces and shows one: the deck flips a class
- * rather than rewriting the button, so nothing here is drawn twice or drawn
- * in JavaScript. */
+ * The play button carries both of its faces and the repeat button one for
+ * each of its three modes, and one shows: the deck flips a class rather than
+ * rewriting the button, so nothing here is drawn twice or drawn in
+ * JavaScript. */
 import Icon from './Icon.astro';
 ---
-<section class="transport" aria-label="Playback controls">
+<section class="transport" aria-label="Playback">
   <div class="tbtns">
     <button type="button" class="tb" id="prev" aria-label="Previous track"><Icon name="prev" /></button>
     <button type="button" class="tb tb-play" id="toggle" aria-label="Play or pause"><Icon name="play" /><Icon name="pause" /></button>
     <button type="button" class="tb" id="stop" aria-label="Stop"><Icon name="stop" /></button>
     <button type="button" class="tb" id="next" aria-label="Next track"><Icon name="next" /></button>
-    <button type="button" class="tb tb-shuffle" id="shuffle" aria-label="Shuffle: off" aria-pressed="false"><Icon name="shuffle" /></button>
-    <button type="button" class="tb tb-repeat" id="repeat" aria-label="Repeat mode: all" aria-pressed="true"><Icon name="repeat" /><Icon name="repeat-one" /></button>
+    <div class="tbgroup" role="group" aria-label="Mode controls">
+      <button type="button" class="tb tb-shuffle" id="shuffle" aria-label="Shuffle: off" aria-pressed="false"><Icon name="shuffle" /></button>
+      <button type="button" class="tb tb-repeat" id="repeat" aria-label="Repeat mode: all" aria-pressed="true"><Icon name="repeat-off" /><Icon name="repeat" /><Icon name="repeat-one" /></button>
+    </div>
   </div>
 
   <div class="seek" id="seek" role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">

@@ -46,3 +46,12 @@ What the deck does when an item ends. `all` starts the cycle again, `one`
 plays the same item again, `off` stops at the end of the cycle. `all` is the
 default, which is what the station's "on repeat" claim means.
 _Avoid_: loop mode
+
+**Transport**:
+The four buttons that drive playback: previous, play/pause, stop, next.
+_Avoid_: controls, player buttons
+
+**Mode controls**:
+Shuffle and repeat — the two buttons that hold a setting rather than make a
+press.
+_Avoid_: toggles, options

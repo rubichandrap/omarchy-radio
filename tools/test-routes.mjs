@@ -39,7 +39,6 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { assignSlugs, fold, slugify } from '../src/lib/slug.ts';
 import { SKINS, derive } from '../src/scripts/theme.ts';
-import { ICONS } from '../src/lib/icons.ts';
 /* The parsing, not the reading: the build imports the manifest and the feed
    through Vite, which plain node knows nothing about. This is the same code
    over the same two files. */
@@ -266,25 +265,58 @@ function foldRule() {
    falls outside latin and latin-ext, which is all this site ships. */
 const GLYPHS = new Set('\u25b6\u25c0\u25a0\u2759\u25bc\u25b2\u25be\u25b8\u2197');
 
-function iconRule() {
-  // The transport's controls, both faces of the ones that have two, and the
-  // arrow that says a link leaves the site.
-  for (const name of ['play', 'pause', 'stop', 'prev', 'next',
-                      'shuffle', 'repeat', 'repeat-one',
-                      'caret-down', 'caret-up', 'caret-right', 'arrow-ne']) {
-    ok(ICONS[name], `there is no icon called ${name}`);
-  }
-  for (const [name, icon] of Object.entries(ICONS)) {
-    ok(icon.cells.length > 0, `${name} is an empty icon`);
-    ok(icon.w > 0 && icon.h > 0, `${name} has no box`);
-    for (const [x, y, w, h] of icon.cells) {
-      ok(Number.isInteger(x) && Number.isInteger(y) && Number.isInteger(w) && Number.isInteger(h),
-         `${name} has a cell off the lattice: ${[x, y, w, h]}`);
-      ok(x >= 0 && y >= 0 && x + w <= icon.w && y + h <= icon.h,
-         `${name} has a cell outside its box: ${[x, y, w, h]} in ${icon.w}x${icon.h}`);
+/* The icons: every name the deck asks the page for, and the size its context
+   calls for — 18px on the six buttons, 12px on the ones that sit in a line of
+   text. They are Lucide's drawings, rendered by the build into the page
+   (src/components/Icon.astro), so what there is to check is the markup: an
+   inline svg per name, stroked in currentColor, decorative, with Lucide's
+   shapes in it and no lattice cells. */
+const ICON_SIZES = {
+  play: 18, pause: 18, stop: 18, prev: 18, next: 18, shuffle: 18, repeat: 18,
+  'repeat-off': 18, 'repeat-one': 18,
+  note: 12, mic: 12, 'caret-down': 12, 'caret-up': 12, 'caret-right': 12,
+  'arrow-ne': 12,
+};
+
+/* What is drawn inside one: a path, a circle, a rounded rect. A lattice cell
+   was an axis-aligned rect with no corner to round, and it is the only shape
+   that would pass for Lucide's if the answer were "it is an svg with a rect
+   in it" — Lucide's own stop is a rect with rx. */
+const DRAWN = /<(?:path|circle|ellipse|line|polyline|polygon)\b|<rect(?=[^>]*\brx=)/;
+
+/** One icon's markup, out of a page: the svg the build wrote for a name, by
+    its opening attributes and what is inside it. The deck's own name is the
+    last class on it (`lucide lucide-play i i-play`), and the guard is what
+    keeps `repeat` from answering for `repeat-one`. */
+function iconIn(body, name) {
+  const m = body.match(new RegExp(
+    `<svg([^>]*\\bclass="[^"]*\\bi i-${name}(?![\\w-])[^"]*"[^>]*)>([\\s\\S]*?)</svg>`));
+  return m && { tag: m[1], inner: m[2] };
+}
+
+function iconRule(body, path) {
+  const missing = [];
+  const wrong = [];
+  const lattice = [];
+  for (const [name, size] of Object.entries(ICON_SIZES)) {
+    const svg = iconIn(body, name);
+    if (!svg) { missing.push(name); continue; }
+    const { tag, inner } = svg;
+    if (!(tag.includes(`width="${size}"`) && tag.includes(`height="${size}"`))) {
+      wrong.push(`${name} is not ${size}px`);
     }
+    if (!tag.includes('stroke="currentColor"') || !tag.includes('fill="none"')) {
+      wrong.push(`${name} is not a Lucide stroke`);
+    }
+    // These sit inside buttons and links that already say what they are.
+    if (!tag.includes('aria-hidden="true"')) wrong.push(`${name} is not decorative`);
+    // shape-rendering="crispEdges" was what held the lattice's steps on the
+    // pixel grid; a cell was a rect with no rx. Either one is the table back.
+    if (tag.includes('shape-rendering') || !DRAWN.test(inner)) lattice.push(name);
   }
-  console.log(`  ${Object.keys(ICONS).length} icons, every cell a whole number inside its box`);
+  ok(missing.length === 0, `${path}: no icon for ${missing.join(', ')}`);
+  ok(wrong.length === 0, `${path}: ${wrong.join(', ')}`);
+  ok(lattice.length === 0, `${path}: ${lattice.join(', ')} is not drawn as Lucide draws it`);
 }
 
 function slugRule() {
@@ -333,9 +365,6 @@ async function main() {
     await readFile(join(ROOT, 'public/stories/feed.rss'), 'utf8'));
   const eps = show.episodes;
   console.log(`${tracks.length} songs, ${eps.length} episodes`);
-
-  console.log('the icons are drawn, not typed');
-  iconRule();
 
   console.log('the rule an address is spelled by');
   slugRule();
@@ -402,6 +431,9 @@ async function main() {
       const typed = [...body].filter((c) => GLYPHS.has(c));
       ok(typed.length === 0,
          `${path}: ${JSON.stringify(typed.join(''))} is a character where an icon should be`);
+      // And the icons themselves: Lucide's, inline, at the size each context
+      // calls for.
+      iconRule(body, path);
     }
 
     console.log('the pages behind a permalink carry their own item');
@@ -483,6 +515,11 @@ async function main() {
       const { status } = await get(path);
       ok(status === 200, `${path} answered ${status}`);
     }
+    // The one address in robots.txt that has to be this site's own: a stale
+    // one sends the crawlers to a deploy that is not here any more.
+    const { body: robotsTxt } = await get('/robots.txt');
+    ok(robotsTxt.includes(`Sitemap: ${CANON}/sitemap.xml`),
+       `robots.txt names another sitemap (${(robotsTxt.match(/Sitemap:.*/) || ['none'])[0]})`);
     ok(existsSync(join(DIST, '.nojekyll')), 'dist/.nojekyll is missing');
     if (existsSync(join(DIST, 'CNAME'))) {
       ok((await readFile(join(DIST, 'CNAME'), 'utf8')).trim().length > 0,

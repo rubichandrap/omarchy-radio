@@ -6,6 +6,12 @@
  * the rows already in it — a permalink with its one row, a list with all of
  * them — and the deck rebuilds them a moment later out of the manifest and
  * the feed.
+ *
+ * #rowCaret, under the list, is the caret on an episode's row. The deck
+ * builds those rows itself, so what it copies into one is markup this build
+ * rendered: both faces, and the row's class decides which shows, the same
+ * trade the two-state buttons make. An element of its own, not a face off the
+ * theme menu's caret, because a row points sideways and that one points up.
  */
 import { BASE, SHOW_PODCAST } from '../lib/site.ts';
 import { noteFor, panelTitle, rowsFor } from '../lib/rows.ts';
@@ -58,6 +64,7 @@ const note = noteFor(kind, list, only, show);
       <TrackRow item={row.item} number={row.number} sub={row.sub} on={row.on} />
     ))}
   </ul>
+  <template id="rowCaret"><Icon name="caret-down" /><Icon name="caret-right" /></template>
   <div class="lyr-box" id="lyricsBox" hidden>
     <ol class="lyrics" id="lyrics"></ol>
   </div>

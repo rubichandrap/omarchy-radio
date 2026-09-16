@@ -18,7 +18,6 @@ import {
   TRACKS_DIR, TRACKS_MANIFEST,
 } from '../lib/site.ts';
 import { assignSlugs, fold } from '../lib/slug.ts';
-import { iconSvg } from '../lib/icons.ts';
 import { dateLabel, fmt, hms, lengthLabel, plural } from '../lib/format.ts';
 import { SKINS, derive, type Skin, type Theme } from './theme.ts';
 import { DESKTOP, desktopName, watchDesktop } from './omarchy-theme.ts';
@@ -66,7 +65,7 @@ var IDS = [
   'marq', 'artist', 'curTime', 'durTime', 'vis', 'prev', 'toggle', 'stop', 'next',
   'shuffle', 'repeat',
   'seek', 'seekFill', 'seekHead', 'volKnob', 'volRot', 'volLabel',
-  'playlistKind', 'playlistName', 'tracks', 'trHead', 'playlistNote',
+  'playlistKind', 'playlistName', 'tracks', 'trHead', 'rowCaret', 'playlistNote',
   'status', 'seg', 'tabSongs', 'tabPodcast',
   'lyricsBtn', 'lyricsBox', 'lyrics', 'installBtn',
   'findRow', 'find', 'findHint'
@@ -502,9 +501,11 @@ function wireInstall() {
    working buttons, and the keyboard media keys reach the deck. Without
    it a backgrounded stream is audible but unreachable. */
 
+/* The lock screen's picture of what is playing. Named from the base: the
+   page it is read from is a song's own address, one directory down. */
 var MEDIA_ART = [
-  { src: 'assets/images/icon-192.png', sizes: '192x192', type: 'image/png' },
-  { src: 'assets/images/icon-512.png', sizes: '512x512', type: 'image/png' }
+  { src: BASE + '/assets/images/icon-192.png', sizes: '192x192', type: 'image/png' },
+  { src: BASE + '/assets/images/icon-512.png', sizes: '512x512', type: 'image/png' }
 ];
 
 function mediaSupported() {
@@ -1731,13 +1732,15 @@ function paintTransport() {
      say the same two things. */
   el.toggle.classList.toggle('is-playing', S.playing);
   el.toggle.setAttribute('aria-label', S.playing ? 'Pause' : 'Play');
-  /* The shuffle button: one state, said twice — the accent for the eye and
-     the accessible name for everything else. */
+  /* The shuffle button: one state, said twice — the fill for the eye, which
+     the stylesheet keys off aria-pressed, and the accessible name for
+     everything else. */
   el.shuffle.setAttribute('aria-pressed', S.shuffle ? 'true' : 'false');
   el.shuffle.setAttribute('aria-label', 'Shuffle: ' + (S.shuffle ? 'on' : 'off'));
-  /* The repeat button: which face it wears, whether the mode is on at all,
-     and which of the three it is. Two of the three share a face, so the
-     accessible name is where that difference lives. */
+  /* The repeat button: a face per mode, so the class it wears is the mode —
+     `is-off` and `is-one` are the two the page does not land in — and the
+     mode is on the accessible name as well as on the face. */
+  el.repeat.classList.toggle('is-off', S.repeat === 'off');
   el.repeat.classList.toggle('is-one', S.repeat === 'one');
   el.repeat.setAttribute('aria-pressed', S.repeat === 'off' ? 'false' : 'true');
   el.repeat.setAttribute('aria-label', 'Repeat mode: ' + S.repeat);
@@ -2125,8 +2128,10 @@ function paintTracks() {
     if (opens) {
       var caret = pick(b, '.tr-c');
       caret.hidden = false;
-      // The same table the page's own icons come out of.
-      caret.innerHTML = iconSvg(S.epOpen ? 'caret-down' : 'caret-right');
+      /* Markup the build rendered, not a drawing: both faces are in the page
+         (#rowCaret) and the row's class says which one shows. */
+      caret.innerHTML = el.rowCaret.innerHTML;
+      caret.classList.toggle('is-open', S.epOpen);
       b.setAttribute('aria-expanded', S.epOpen ? 'true' : 'false');
     }
     b.addEventListener('click', function (ev) {
@@ -2769,9 +2774,13 @@ function boot() {
     if (vw instanceof HTMLElement) vw.hidden = true;
   }
 
-  if ('serviceWorker' in navigator) {
-    // Nothing here depends on it, so a failure is not worth reporting.
-    navigator.serviceWorker.register('/sw.js').catch(function () { /* fine without */ });
+  /* Only where it belongs: a service worker in dev caches the dev server's
+     answers, and a page then shows what it was told to memorise rather than
+     what the file says. */
+  if ('serviceWorker' in navigator && import.meta.env.PROD) {
+    // Nothing here depends on it, so a failure is not worth reporting. The
+    // file is named from the site's base like every other one.
+    navigator.serviceWorker.register(BASE + '/sw.js').catch(function () { /* fine without */ });
   }
 }
 

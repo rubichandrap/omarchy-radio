@@ -59,18 +59,18 @@ ul, ol { list-style: none; }
 a { color: var(--ac); text-decoration: none; }
 
 /* ── icons ───────────────────────────────────────────────
-   src/lib/icons.ts, drawn as cells on a lattice at one cell to the pixel.
-   The transport used characters, and not one of them was in a subset this
-   site ships — geometric shapes and arrows are in neither latin nor
-   latin-ext, so they came from whatever font the browser fell back to, and
-   ▶ and ◀ can arrive as colour emoji on a phone.
+   Lucide's, through src/components/Icon.astro: an inline svg per icon,
+   built into the page, stroked in currentColor at the size its context
+   calls for. The transport used to be characters — ▶ ◀◀ ■ ❙❙ — and not one
+   of them was in a subset this site ships, so they came from whatever font
+   the browser fell back to, and ▶ and ◀ can arrive as colour emoji on a
+   phone. Between that and this, they were cells on a lattice.
 
-   No width or height here: each carries its own, in cells, which is what
-   keeps the steps on the pixel grid. */
+   No width or height here: the drawing carries its own. No fill either — a
+   fill would turn a stroked icon into a blob. */
 .i {
   display: block;
   flex: none;
-  fill: currentColor;
 }
 
 /* An icon set in a line of text sits on the baseline rather than above it. */
@@ -80,20 +80,30 @@ a { color: var(--ac); text-decoration: none; }
   margin-left: 2px;
 }
 
-/* Both faces of a two-state icon are in the page and one is shown: a class
-   is cheaper than rewriting a button forty times a minute, and it keeps the
+/* Every face an icon can wear is in the page and one is shown: a class is
+   cheaper than rewriting a button forty times a minute, and it keeps the
    drawing out of the deck. The showing rules are the more specific ones, so
-   they win without an !important or an ordering trick. */
+   they win without an !important or an ordering trick. The repeat button has
+   three faces, one per mode: `repeat` is the face of the mode the page lands
+   in, and `is-off` and `is-one` — the classes the deck flips — put the other
+   two up. The row caret is the one the deck fills in itself — both faces
+   copied out of #rowCaret — and it flips the same way. */
 .tb-play .i-pause,
 .tb-repeat .i-repeat-one,
+.tb-repeat .i-repeat-off,
 .caret .i-caret-up,
+.tr-c .i-caret-down,
+.tr-c.is-open .i-caret-right,
 .tb-play.is-playing .i-play,
+.tb-repeat.is-off .i-repeat,
 .tb-repeat.is-one .i-repeat,
 .caret.is-open .i-caret-down { display: none; }
 
 .tb-play.is-playing .i-pause,
+.tb-repeat.is-off .i-repeat-off,
 .tb-repeat.is-one .i-repeat-one,
-.caret.is-open .i-caret-up { display: block; }
+.caret.is-open .i-caret-up,
+.tr-c.is-open .i-caret-down { display: block; }
 
 a:hover { color: var(--fg); }
 
@@ -515,27 +525,46 @@ a, button, [role="slider"] { -webkit-tap-highlight-color: transparent; }
   margin-left: -1px;
 }
 .tb:first-child { margin-left: 0; }
+
+/* The one seam in the row: the mode controls are a strip of their own, 8px
+   off the transport's. It is the margin the buttons already build their
+   strips out of, at the one place it is not a shared border — which is the
+   whole of the difference between a button that moves playback and one that
+   holds a setting. The group element carries that difference to a reader too,
+   so six buttons are not one run of six to a screen reader; `display:
+   contents` leaves it no box, and the six stay the flex items they were, the
+   same widths down to the subpixel. */
+.tbgroup { display: contents; }
+
+/* The group's own first button carries the seam: the group has no box, and
+   `.tb:first-child` — which the four transport buttons still want — would
+   otherwise answer for it. */
+.tbgroup > .tb:first-child { margin-left: 8px; }
+
 .tb:hover { border-color: var(--ac); color: var(--ac); z-index: 1; }
 
-/* The repeat button has three modes and two faces, so the face cannot carry
-   all of it: the accent says the cycle will come round again, and the
-   accessible name says which of the repeating ones it is. It sits after the
-   hover rule so that a pressed button stays lit through a hover. */
-.tb-repeat[aria-pressed="true"] { color: var(--ac); }
-
-/* The shuffle button is one state deep, and its face carries none of it: the
-   accent says the order is a permutation, and the accessible name says which
-   way. It sits after the hover rule for the same reason. */
-.tb-shuffle[aria-pressed="true"] { color: var(--ac); }
-
-.tb-play {
-  width: 74px;
-  font-size: 13px;
+/* The repeat button's face says which of its three modes it is in, and the
+   shuffle button's accessible name says which way the order runs; the fill
+   says the same thing to the eye on both, and says it the way the play
+   button already says it — accent ground, the accent's own ink. Off is the
+   plain outline every button wears by default, so on and off cannot be
+   confused. These sit after the hover rule so that a pressed button stays
+   filled through a hover, where the fill takes the bright accent. */
+.tb-play,
+.tb-shuffle[aria-pressed="true"],
+.tb-repeat[aria-pressed="true"] {
   color: var(--acFg);
   background: var(--ac);
   border-color: var(--ac);
 }
-.tb-play:hover { background: var(--acHi); border-color: var(--acHi); color: var(--acFg); }
+
+.tb-play:hover,
+.tb-shuffle[aria-pressed="true"]:hover,
+.tb-repeat[aria-pressed="true"]:hover {
+  background: var(--acHi);
+  border-color: var(--acHi);
+  color: var(--acFg);
+}
 
 .seek {
   flex: 1;
@@ -1113,7 +1142,6 @@ a, button, [role="slider"] { -webkit-tap-highlight-color: transparent; }
      the left with the rest of the row empty. */
   .tbtns { width: 100%; }
   .tb { height: 40px; width: auto; flex: 1; }
-  .tb-play { flex: 1.6; }
 
   .seek { height: 44px; }
 

@@ -88,7 +88,7 @@ npm run test:browser
 | `src/scripts/omarchy-theme.ts` | Live synchronization with desktop terminal themes |
 | `src/scripts/field.ts` | 8×8 Bayer dither background canvas and audio spectrum analyser |
 | `src/scripts/lcd-vhs.ts` | Canvas UI VHS shader harness for the LCD marquee |
-| `src/lib/icons.ts` | Pixel-exact 1:1 lattice bitmap transport and navigation icons |
+| `src/components/Icon.astro` | The deck's icons: one map from a deck name to the Lucide drawing it is |
 | `src/lib/lists.ts` | Track and podcast feed ingestion and schema definitions |
 | `src/lib/slug.ts` | URL slug derivation rule shared between build-time and runtime router |
 | `src/pages/` | Astro route definitions for permalink static pages |
