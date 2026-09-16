@@ -6,9 +6,10 @@ was which one.
 
 Each album gets a root address of its own — `/omarchy`, `/lofi` — beside
 `/podcast`, with `/playlist` left meaning every song. Album slugs are reserved
-against the root words that already exist (`playlist`, `podcast`, `assets`,
-`stories`, `tracks`, `sw.js`, `robots.txt`, `sitemap.xml`, `404`) and the
-build refuses a clash.
+against the root words that already exist (`playlist`, `podcast`, `all`,
+`index`, `404`, `assets`, `stories`, `tracks`, `_astro`, `sitemap.xml`,
+`robots.txt`, `sw.js`, `site.webmanifest`, `favicon.ico`) and the build
+refuses a clash.
 
 The alternative was `/playlist/lofi`, which reuses a shape the router already
 has. It was rejected because `/playlist/<slug>` is also every song's
