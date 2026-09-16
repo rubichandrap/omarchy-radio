@@ -3064,8 +3064,6 @@ function boot() {
   window.addEventListener('popstate', function () {
     var r = here();
     if (navigate(r, 'replace')) return;
-    /* A route that names nothing here is not a reason to go quiet: the
-       playlist answers, and the address stops claiming otherwise. */
     var hadPop = leaveScope();
     S.route = r.known ? r.kind : '';
     chose = false;
