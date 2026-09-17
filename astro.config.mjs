@@ -47,7 +47,12 @@ export default defineConfig({
   site: 'https://rubichandrap.github.io',
   base: '/omarchy-radio',
   integrations: [listDirectoryIndexes()],
-  trailingSlash: 'never',
+  /* Which spelling the server enforces: neither. The host resolves by file —
+     the front page and the two lists answer at their slash form, a file
+     address at the slash-free one — and the dev server should not add a rule
+     of its own on top. 'never' made dev refuse /omarchy-radio/, the address
+     the deck writes for the front page; 'ignore' leaves dev the host's call. */
+  trailingSlash: 'ignore',
   build: {
     format: 'file',
     // The deck and its stylesheets are named by a stamp of their contents, so
