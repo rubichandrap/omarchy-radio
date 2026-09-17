@@ -1930,6 +1930,13 @@ function paintTransport() {
      /podcast               the episodes
      /podcast/<episode>     that episode, playing
 
+   Every address in that table but the first is a file's, and a file is
+   spelled without the trailing slash because the host serves it so, with a
+   200. Home is the base itself: its spelling keeps the slash — the one its
+   canonical carries and the one the app manifest's scope is written with —
+   because a window installed from the app reads an address outside that
+   scope as another site and shows the browser's own bar on it.
+
    Those are real pages. Astro writes one per item — src/pages/playlist and
    src/pages/podcast — and one per album, at the root, so a link that is
    shared arrives as a document of its own: the song's name in the tab, its
@@ -1979,7 +1986,8 @@ function permalink(t: Item): string { return location.origin + BASE + '/' + t.ke
 /* Tolerant on the way in, exact on the way out. A trailing slash, the
    .html of the file that served the page, a capital letter, an escaped
    character: all of them name the same route, and the deck then writes the
-   one spelling worth sharing.
+   one spelling worth sharing — which for the front page keeps the base's
+   own trailing slash, because it is the base itself and not a file.
 
    An address this deck does not own is reported as such rather than guessed
    at, so a link to a track file or to the feed is left to the browser. */
@@ -2056,8 +2064,16 @@ function showingRel(): string {
   return S.route ? '/' + S.route : '/';
 }
 
+/* The address for what the deck is showing. Home is the one spelling that
+   keeps its trailing slash: the front page is the base itself, and both the
+   canonical link and the app manifest's scope are spelled that way. The
+   slash-free spelling is a 301, and an installed window reads an address
+   outside the manifest's scope as another site and shows the browser's own
+   bar on it. Every other address here is a file's, and the host serves a
+   file from its slash-free spelling with a 200. */
 function wantedPath(): string {
-  return (BASE + showingRel()).replace(/\/+$/, '') || '/';
+  var rel = showingRel();
+  return rel === '/' ? BASE + '/' : BASE + rel;
 }
 
 /* Pressing a row is a navigation and earns a history entry: back returns

@@ -39,12 +39,20 @@ function listDirectoryIndexes() {
    an index in it. GitHub Pages serves the extensionless path from <path>.html
    with a 200 and no redirect; the directory form would answer /playlist/song
    with a 301 to /playlist/song/, and the canonical links, the sitemap and the
-   address the deck writes as it plays all name the slash-free spelling. */
+   address the deck writes as it plays all name the slash-free spelling. The
+   front page is the one address that is not a file: it is the base itself,
+   and both its canonical and the app manifest's scope spell it with the
+   trailing slash. */
 export default defineConfig({
   site: 'https://rubichandrap.github.io',
   base: '/omarchy-radio',
   integrations: [listDirectoryIndexes()],
-  trailingSlash: 'never',
+  /* Which spelling the server enforces: neither. The host resolves by file —
+     the front page and the two lists answer at their slash form, a file
+     address at the slash-free one — and the dev server should not add a rule
+     of its own on top. 'never' made dev refuse /omarchy-radio/, the address
+     the deck writes for the front page; 'ignore' leaves dev the host's call. */
+  trailingSlash: 'ignore',
   build: {
     format: 'file',
     // The deck and its stylesheets are named by a stamp of their contents, so

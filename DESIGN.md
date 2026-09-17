@@ -354,7 +354,9 @@ Astro is that half, done by something that does it for a living:
 - **`build.format: 'file'`,** so `/playlist/still-licensed` is still a file at
   `playlist/still-licensed.html` served at the extensionless path, 200, no
   redirect. The directory form would have answered every existing link with a
-  301 to a trailing slash the canonical links do not have.
+  301 to a trailing slash the canonical links do not have — the front page's
+  own excepted: it is the base itself rather than a file, and both its
+  canonical and the app manifest's scope carry the slash.
 - **Nothing generated is committed.** The contribution path is what it always
   was — an MP3 and three lines of JSON — minus the thirty-five files.
 
