@@ -26,6 +26,8 @@
      - the links from before the paths still work, and rewrite themselves
      - a page that names nothing plays the playlist, from the top, without
        taking the address over
+     - the front page's address, which keeps the trailing slash the manifest's
+       scope is spelled with
      - a slug that names nothing falls back to the playlist
      - the last track runs into the first one
      - the repeat modes: `one` plays a finished item again from the top, `off`
@@ -428,10 +430,16 @@ async function routes() {
     const m = sitemap.match(new RegExp(`<loc>([^<]*/${a.slug})</loc>`));
     return { slug: a.slug, name: a.name, path: m ? new URL(m[1]).pathname : `/${a.slug}` };
   });
+  /* The front page, spelled the way the site spells it: the canonical link
+     the home document carries is the address the site says the page is at,
+     and it is the one that keeps its trailing slash. */
+  const homeDoc = await (await fetch(`${BASE}/`)).text();
+  const home = new URL(/<link rel="canonical" href="([^"]*)"/.exec(homeDoc)[1]).pathname;
   return {
     songs: items.filter((i) => i.kind === 'playlist'),
     eps: items.filter((i) => i.kind === 'podcast'),
     albums,
+    home,
   };
 }
 
@@ -2701,6 +2709,33 @@ async function icons({ songs, eps }) {
   }
 }
 
+/* The home address is the one the deck writes with its slash. Every other
+   address it writes is a file's, and the host serves those with a 200 from
+   the slash-free spelling; the front page is the base itself, whose
+   slash-free spelling the host answers with a 301 and whose slash form is
+   what the canonical and the app's manifest scope name. Booting there used
+   to leave the address slash-free — an address outside the manifest's
+   scope, which an installed window shows the browser's own bar for. The
+   expectation is the home document's own canonical link, so the check
+   proves the rule under a base the way the site deploys; at a root deploy
+   there is one spelling and nothing to catch. */
+async function homeAddress({ home }) {
+  section('the home address');
+  const browser = await Browser.launch('no-user-gesture-required');
+  const tab = await browser.tab();
+  try {
+    await tab.go(home);
+    const s = await until('the deck to settle on the home page', async () => {
+      const st = await tab.state();
+      return st.playing ? st : null;
+    });
+    if (s) is(s.path, home, 'the home address keeps its trailing slash');
+  } finally {
+    await tab.close();
+    await browser.close();
+  }
+}
+
 /* ── go ──────────────────────────────────────────────────────────────── */
 const server = serve();
 let code = 1;
@@ -2725,6 +2760,7 @@ try {
   await stalePlaylist(site);
   await desktopTheme();
   await icons(site);
+  await homeAddress(site);
   await offline(site);
   console.log(`  ${passed - mark} checks`);
   console.log(`\n${passed} checks passed`);

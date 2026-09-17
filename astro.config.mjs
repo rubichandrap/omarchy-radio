@@ -39,7 +39,10 @@ function listDirectoryIndexes() {
    an index in it. GitHub Pages serves the extensionless path from <path>.html
    with a 200 and no redirect; the directory form would answer /playlist/song
    with a 301 to /playlist/song/, and the canonical links, the sitemap and the
-   address the deck writes as it plays all name the slash-free spelling. */
+   address the deck writes as it plays all name the slash-free spelling. The
+   front page is the one address that is not a file: it is the base itself,
+   and both its canonical and the app manifest's scope spell it with the
+   trailing slash. */
 export default defineConfig({
   site: 'https://rubichandrap.github.io',
   base: '/omarchy-radio',
